@@ -17,7 +17,7 @@ class Data:
     def __init__(self):
         pass
     
-    def load(self, data, *options):
+    def load(self, data, **options):
         assert len(data.shape) == 2, "data must be a 2d array of shape (n_samples, n_features)"
         
         self.data = data
@@ -58,7 +58,11 @@ class Data:
     def generate(self, n_samples, method, target=None, **model_args):
         if target is None:
             X = self.transform()
-            X_ = X[np.logical_not(np.isnan(X).any(axis=1))]
+            nans = np.isnan(X).any(axis=1)
+            print(nans)
+            if nans.all():
+                raise ValueError("All rows contain nan")
+            X_ = X[np.logical_not(nans)]
             method.model(X_, **model_args)
             return self.inv_transform(method.generate(n_samples))
         else:
@@ -67,7 +71,10 @@ class Data:
             for value in self.data[target].unique():
                 self.encoders[target] = Encoder.EncoderIgnore(default=value)
                 X = self.transform(self.data[self.data[target] == value])
-                X_ = X[np.logical_not(np.isnan(X).any(axis=1))]
+                nans = np.isnan(X).any(axis=1)
+                if nans.all():
+                    raise ValueError("All rows for {target} = {value} contain nan")
+                X_ = X[np.logical_not(nans)]
                 method.model(X_, **model_args)
                 new_data.append(self.inv_transform(method.generate(n_samples)))
             self.encoders[target] = target_encoder
@@ -79,10 +86,8 @@ class Data:
             nans = np.isnan(X).any(axis=1)
             if nans.all():
                 raise ValueError("All rows contain nan")
-            X_ = X[np.logical_not(nans)]
-            Xn = X[nans]
-            method.model(X_, **model_args)
-            Xn = method.fill(Xn)
+            method.model(X[np.logical_not(nans)], **model_args)
+            X[nans] = method.fill(X[nans])
             return self.inv_transform(X)
         else:
             target_encoder = self.encoders[target]
@@ -93,10 +98,8 @@ class Data:
                 nans = np.isnan(X).any(axis=1)
                 if nans.all():
                     raise ValueError("All rows for {target} = {value} contain nan")
-                X_ = X[np.logical_not(nans)]
-                Xn = X[nans]
-                method.model(X_, **model_args)
-                Xn = method.fill(Xn)
+                method.model(X[np.logical_not(nans)], **model_args)
+                X[nans] = method.fill(X[nans])
                 new_data.append(self.inv_transform(X))
             self.encoders[target] = target_encoder
             return pd.concat(new_data)
@@ -106,13 +109,13 @@ class Data:
 if __name__ == "__main__":
     test_1 = pd.read_csv("test_1.csv")
     d = Data()
-    d.load(test_1)
+    d.load(test_1.copy())
     X = d.transform()
     Y = d.inv_transform(X)
     
     import matplotlib.pyplot as plt
     def plotting(gen):
-        X = gen.to_numpy()[:, :2]  # we only take the first two features.
+        X = gen.to_numpy()[:, :2]
         y = gen.to_numpy()[:, 4]
         _, y = np.unique(y, return_inverse=True)
 
@@ -138,5 +141,14 @@ if __name__ == "__main__":
     plotting(d.generate(100, target='Species', method=GMM.GMM()))
     plotting(d.generate(100, target='Species', method=KDE.KDE()))
     
+    
+    d.data.at[0, 'Species'] = 'BadData'
+    d.data.at[72, 'Species'] = 'BadData'
+    d.data.at[149, 'Species'] = 'BadData'
+    gmm_fill = d.fill(GMM.GMM())
+    kde_fill = d.fill(KDE.KDE())
+    print(f"Expected: {test_1.at[0, 'Species']} - GMM: {gmm_fill.at[0, 'Species']} - KDE: {kde_fill.at[0, 'Species']}")
+    print(f"Expected: {test_1.at[72, 'Species']} - GMM: {gmm_fill.at[72, 'Species']} - KDE: {kde_fill.at[72, 'Species']}")
+    print(f"Expected: {test_1.at[149, 'Species']} - GMM: {gmm_fill.at[149, 'Species']} - KDE: {kde_fill.at[149, 'Species']}")
     
     

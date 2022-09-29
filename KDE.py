@@ -20,6 +20,9 @@ class KDE:
             ), 2)
         probs = np.sum(np.exp(-dist / 2 / self.var(self.n)) / np.sqrt(2 * np.pi), 1) / self.n
         return probs
+    
+    def loglikelihood(self, X):
+        return np.sum(np.log(self.probabilities(X)))
         
     def model(self, X):
         self.X = X

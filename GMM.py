@@ -23,7 +23,7 @@ class GMM:
             
             probs.append(
                 k * (dim * (dim + 1) / 2 + dim + 1) * np.log(n)
-                - 2 * np.log(gmm.likelihood(X))
+                - 2 * gmm.loglikelihood(X)
                 )
             ks.append(k)
             
@@ -86,8 +86,8 @@ class GMM:
     def probabilities(self, X):
         return np.sum(self.k_probability(X), 1)
     
-    def likelihood(self, X):
-        return np.prod(self.probabilities(X)) + 1e-300
+    def loglikelihood(self, X):
+        return np.sum(np.log(self.probabilities(X)))
     
     def iterate(self):
         probs = self.k_probability().transpose()
@@ -117,7 +117,7 @@ class GMM:
                 gmm = GMM(k)
                 gmm.model(X, max_iter, max_time, llh_tol, n_attempts)
                 bic = k * (self.dim * (self.dim + 1) / 2 + self.dim + 1) * np.log(self.n) \
-                    - 2 * np.log(gmm.likelihood(X))
+                    - 2 * gmm.loglikelihood(X)
                 if best_bic is None or bic < best_bic:
                     best_bic = bic
                     best_k = k
@@ -131,12 +131,12 @@ class GMM:
             loop = True
             iters = max_iter
             time = max_time + gettime()
-            llh = np.log(self.likelihood(X))
+            llh = self.loglikelihood(X)
             while loop:
                 self.iterate()
                 iters -= 1
                 last_llh = llh
-                llh = np.log(self.likelihood(X))
+                llh = self.loglikelihood(X)
                 loop &= iters > 0
                 loop &= llh - last_llh > llh_tol
                 loop &= time > gettime()
@@ -215,4 +215,4 @@ if __name__ == '__main__':
 
     plt.show()
     
-    #GMM.probability_plot(X, 10)
+    GMM.probability_plot(X, 10)
