@@ -73,9 +73,6 @@ class GMM(BaseGenerator):
             for t_resp, resp, mean in 
                 zip(t_resps, resps, self.means)
                 ])
-        
-    def model(self, *a, **k):
-        self.fit(*a, **k)
     
     def _fit(self, X, max_iter=1000, max_time=1, llh_tol=1e-3, n_attempts=3):
         self.X = X
@@ -83,13 +80,15 @@ class GMM(BaseGenerator):
         if self.k_mode == 'auto':
             best_bic = None
             best_k = None
+            gmm = GMM(fit_max_iter=max_iter, fit_max_time=max_time, \
+                      fit_llh_tol=llh_tol, fit_n_attempts=n_attempts)
             k = 1
             k_lim = 2
             loop = k_lim if self.k_max is None else self.k_max
             while not loop == 0:
                 loop -= 1
-                gmm = GMM(k)
-                gmm._fit(X, max_iter, max_time, llh_tol, n_attempts)
+                gmm.set_k(k)
+                gmm.fit(X)
                 bic = k * (self.dim * (self.dim + 1) / 2 + self.dim + 1) * np.log(self.n) \
                     - 2 * gmm.loglikelihood(X)
                 if best_bic is None or bic < best_bic:

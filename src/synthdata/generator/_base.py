@@ -8,8 +8,8 @@ Base Generator
 import numpy as np
 
 class BaseGenerator():
-    def __init__(self, infer=False, **kwargs):
-        self.infer = infer
+    def __init__(self, **kwargs):
+        self.fitted = False
         self.fit_args = dict()
         self.gen_args = dict()
         self.fill_args = dict()
@@ -30,36 +30,21 @@ class BaseGenerator():
         
     def set_fill_args(self, **kwargs):
         self.fill_args = self.fill_args | kwargs
-    
-    def infer(self, data):
-        if self.infer:
-            self._infer
-        self.infer = False
         
-    def _infer(self):
-        NotImplementedError("This generator doesn't have inference from data functionality")
-    
-    def probabilities(self, X):
-        NotImplementedError("This generator can't calculate the probability function")
-    
     def loglikelihood(self, X):
+        assert self.fitted
         return np.sum(np.log(self.probabilities(X)))
     
     def fit(self, X, **kwargs):
-        return self._fit(X, **self.fit_args | kwargs)
-    
-    def _fit(self, X):
-        NotImplementedError("This generator doesn't have fit function")
+        self.fitted = True
+        out = self._fit(X, **self.fit_args | kwargs)
+        return out
     
     def generate(self, size, **kwargs):
+        assert self.fitted
         return self._generate(size, **self.gen_args | kwargs)
     
-    def _generate(self, size):
-        NotImplementedError("This generator doesn't have generate function")
-    
     def fill(self, X, **kwargs):
+        assert self.fitted
         return self._fill(X, **self.fill_args | kwargs)
-    
-    def _fill(self, X):
-        NotImplementedError("This generator doesn't have fill function")
     

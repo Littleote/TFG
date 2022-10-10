@@ -22,7 +22,7 @@ var = np.var(data, 0)
 X = (data - mean) / np.sqrt(var)
 
 kde = KDE()
-kde.model(X)
+kde.fit(X)
 
 syn = 1000
 fdata = np.random.normal(mean, np.sqrt(var) / 2, size=(syn, 2)) + np.full((syn, 2), [np.nan, 0])

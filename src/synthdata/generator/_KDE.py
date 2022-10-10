@@ -7,8 +7,11 @@ Kernel Density Estimation
 
 import numpy as np
 
-class KDE:
-    def __init__(self, var=lambda n: 1 / n):
+from ._base import BaseGenerator
+
+class KDE(BaseGenerator):
+    def __init__(self, var=lambda n: 1 / n, **kwargs):
+        super().__init__(**kwargs)
         self.var = var
         
     def probabilities(self, X):
@@ -20,19 +23,16 @@ class KDE:
         probs = np.sum(np.exp(-dist / 2 / self.var(self.n)) / np.sqrt(2 * np.pi), 1) / self.n
         return probs
     
-    def loglikelihood(self, X):
-        return np.sum(np.log(self.probabilities(X)))
-        
-    def model(self, X):
+    def _fit(self, X):
         self.X = X
         self.n, self.dim = X.shape
             
-    def generate(self, size):
+    def _generate(self, size):
         ind = np.random.choice(self.n, size)
         S = np.random.normal(self.X[ind], np.sqrt(self.var(self.n)))
         return S
     
-    def fill(self, Y):
+    def _fill(self, Y):
         assert Y.shape[1] == self.dim, "Size mismatch"
         diffs = np.reshape(self.X, (1, -1, self.dim)) - np.reshape(Y, (-1, 1, self.dim))
         dists = np.sum(np.square(np.nan_to_num(diffs)), 2)

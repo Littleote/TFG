@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Sep 26 12:22:19 2022
+Classes per codificar
 
 @author: david
 """
@@ -114,24 +114,3 @@ class EncoderEquivalence:
         for i, key in enumerate(keys):
             data[val == i] = self.backward.get(key)
         return X
-
-def auto(data):
-    if data.dtype == object:
-        symbols = data.unique()
-        use = np.sqrt(data.shape[0]) / symbols.shape[0]
-        if use > 1:
-            return EncoderOHE(list(symbols))
-        else:
-            return EncoderIgnore('Ignored')
-    else:
-        return EncoderNone()
-
-def parse(name):
-    name = name.lower()
-    if name == 'none':
-        return EncoderNone
-    elif name == 'ignore':
-        return EncoderIgnore
-    elif name == 'ohe':
-        return EncoderOHE
-    raise ValueError(f"Invalid name ({name}) for encoder")
