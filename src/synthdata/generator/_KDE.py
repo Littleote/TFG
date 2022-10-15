@@ -20,7 +20,7 @@ class KDE(BaseGenerator):
             np.reshape(self.X, (1, -1, self.dim))
             - np.reshape(X, (-1, 1, self.dim))
             ), 2)
-        probs = np.sum(np.exp(-dist / 2 / self.var(self.n)) / np.sqrt(2 * np.pi), 1) / self.n
+        probs = np.sum(np.exp(-dist / 2 / self.var(self.n)) / np.pow(np.sqrt(2 * np.pi * self.var(self.n)), self.dim), 1) / self.n
         return probs
     
     def _fit(self, X):

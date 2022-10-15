@@ -9,6 +9,7 @@ import numpy as np
 
 class BaseGenerator():
     def __init__(self, **kwargs):
+        super().__init__()
         self.fitted = False
         self.fit_args = dict()
         self.gen_args = dict()
