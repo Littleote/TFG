@@ -17,6 +17,9 @@ class EncoderNone:
     def decode(self, X):
         return X
     
+    def toNan(self, data):
+        return np.isnan(data)
+    
 class EncoderLimit:
     def __init__(self, lower=None, upper=None, tails=True, influence=1):
         self.size = 1
@@ -54,6 +57,8 @@ class EncoderLimit:
         data = self.a + self.sign * (X + 1) * self.range
         return data
     
+    def toNan(self, data):
+        return np.isnan(self.nan_out(self.sign * (data - self.a) / self.range - 1)) 
 
 class EncoderIgnore:
     def __init__(self, default=None):
@@ -65,6 +70,9 @@ class EncoderIgnore:
     
     def decode(self, X):
         return np.full((X.shape[0], 1), self.default)
+    
+    def toNan(self, data):
+        return np.full(data.shape, False)
     
 class EncoderOHE:
     def __init__(self, symbols):
@@ -88,6 +96,10 @@ class EncoderOHE:
     
     def decode(self, X):
         return np.reshape(self.symbols[np.argmax(X, 1)], (-1, 1))
+    
+    def toNan(self, data):
+        valid = np.vectorize(lambda x: x in self.symbols)
+        return ~valid(data)
 
 class EncoderEquivalence:
     def __init__(self, symbols):
@@ -114,3 +126,7 @@ class EncoderEquivalence:
         for i, key in enumerate(keys):
             data[val == i] = self.backward.get(key)
         return X
+    
+    def toNan(self, data):
+        valid = np.vectorize(lambda x: x in self.forward.keys())
+        return ~valid(data)

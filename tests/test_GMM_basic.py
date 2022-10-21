@@ -21,6 +21,8 @@ var = np.var(data, 0)
 
 X = (data - mean) / np.sqrt(var)
 
+### fit, generate i fill test
+
 gmm = GMM(fit_n_attempts=5)
 gmm.fit(X)
 
@@ -38,6 +40,19 @@ sp = ax.scatter(fdata[:,0], fdata[:,1], c='green', alpha=.1)
 sp = ax.scatter(data[:,0], data[:,1], c='red', alpha=.2)
 
 plt.show()
+
+### Probabilitat total ~= 1
+
+steps = 200
+size = 2
+delta = 2 * size / steps
+space = np.linspace(-size, size, steps)
+x, y = np.meshgrid(space, space)
+xy = np.reshape(np.stack([x, y], 2), (-1, 2))
+probs = gmm.probabilities(xy)
+print(np.sum(probs) * delta ** 2)
+
+### BIC per diferents valors de k
 
 dim = X.shape[1]
 n = X.shape[0]

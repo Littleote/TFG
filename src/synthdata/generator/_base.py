@@ -34,7 +34,7 @@ class BaseGenerator():
         
     def loglikelihood(self, X):
         assert self.fitted
-        return np.sum(np.log(self.probabilities(X)))
+        return np.sum(np.log(self.probabilities(X) + 1e-300))
     
     def fit(self, X, **kwargs):
         self.fitted = True

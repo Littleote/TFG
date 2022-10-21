@@ -10,7 +10,7 @@ import numpy as np
 from ._base import BaseGenerator
 
 class KDE(BaseGenerator):
-    def __init__(self, var=lambda n: 1 / n, **kwargs):
+    def __init__(self, var=lambda n, d: np.power(n, -1 / d), **kwargs):
         super().__init__(**kwargs)
         self.var = var
         
@@ -20,7 +20,7 @@ class KDE(BaseGenerator):
             np.reshape(self.X, (1, -1, self.dim))
             - np.reshape(X, (-1, 1, self.dim))
             ), 2)
-        probs = np.sum(np.exp(-dist / 2 / self.var(self.n)) / np.pow(np.sqrt(2 * np.pi * self.var(self.n)), self.dim), 1) / self.n
+        probs = np.sum(np.exp(-dist / 2 / self.var(self.n, self.dim)) / np.power(2 * np.pi * self.var(self.n, self.dim), self.dim / 2), 1) / self.n
         return probs
     
     def _fit(self, X):
@@ -29,17 +29,17 @@ class KDE(BaseGenerator):
             
     def _generate(self, size):
         ind = np.random.choice(self.n, size)
-        S = np.random.normal(self.X[ind], np.sqrt(self.var(self.n)))
+        S = np.random.normal(self.X[ind], np.sqrt(self.var(self.n, self.dim)))
         return S
     
     def _fill(self, Y):
         assert Y.shape[1] == self.dim, "Size mismatch"
         diffs = np.reshape(self.X, (1, -1, self.dim)) - np.reshape(Y, (-1, 1, self.dim))
         dists = np.sum(np.square(np.nan_to_num(diffs)), 2)
-        probs = np.exp(-dists / 2 / self.var(self.n))
+        probs = np.exp(-dists / 2 / self.var(self.n, self.dim))
         for y, prob in zip(Y, probs):
             bad = np.isnan(y)
             ind = np.random.choice(self.n, p=prob / np.sum(prob))
-            y[bad] = np.random.normal(self.X[ind, bad], np.sqrt(self.var(self.n)))
+            y[bad] = np.random.normal(self.X[ind, bad], np.sqrt(self.var(self.n, self.dim)))
         return Y
     
