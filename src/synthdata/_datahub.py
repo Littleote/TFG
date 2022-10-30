@@ -86,49 +86,6 @@ class DataHub:
         else:
             return X
     
-    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False):
-        method = self.method if method is None else method
-        self.preprocess = 'normalize'
-        if n_samples is None and folds is None:
-            raise ValueError("No value specified for kfold validation")
-        def sft(n_samples, folds, total):
-            if folds is None:
-                assert total >= 2 * n_samples, "n_samples to big for the data"
-                folds = total // n_samples
-                return n_samples, folds, n_samples * folds
-            elif n_samples is None:
-                assert folds >= 2, "folds must be at least 2"
-                n_samples = total // folds
-                return n_samples, folds, folds * n_samples
-            else:
-                assert total >= 2 * n_samples, "n_samples to big for the data"
-                folds = min(folds, total // n_samples)
-                return n_samples, folds, n_samples * folds
-            
-        if target is None:
-            s, f, t = sft(n_samples, folds, self.samples)
-            sampling = np.reshape(np.random.choice(self.samples, t, False), (f, -1))
-            value = 0
-            selfvalue = 0
-            for i in range(f):
-                train = self.data.iloc[sampling[i]]
-                test = self.data.iloc[sampling[(i + 1) % f]]
-                self.run(train, method)
-                if validation == 'loglikelihood':
-                    selfvalue += method.loglikelihood(self.transform(train)) / s
-                    value += method.loglikelihood(self.transform(test)) / s
-                else:
-                    Xgen = self.transform(self.inv_transform(method.generate(s)))
-                    Xtrain = self.transform(train)
-                    Xtest = self.transform(test)
-                    selfvalue += validation(Xtrain, Xgen)
-                    value += validation(Xtest, Xgen)
-            selfvalue /= f
-            value /= f
-            return (value, selfvalue) if return_fit else value
-        else:
-            pass
-    
     def run(self, data, method, **method_args):
         nans = self.toNan(data)
         if nans.all():
@@ -143,45 +100,83 @@ class DataHub:
             nans |= self.encoders[label].toNan(data[label])
         return nans
     
+    def for_target(self, target, FUN):
+        if target is None:
+            results = {'all': FUN(self.data)}
+        else:
+            target_encoder = self.encoders[target]
+            results = dict()
+            for value in self.data[target].unique():
+                self.encoders[target] = enc.ignore(default=value)
+                subdata = self.data[self.data[target] == value]
+                results[str(value)] = FUN(subdata)
+            self.encoders[target] = target_encoder
+        return results
+    
+    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False):
+        method = self.method if method is None else method
+        self.preprocess = 'normalize'
+        if n_samples is None and folds is None:
+            raise ValueError("No value specified for kfold validation")
+        def sample_fold_total(n_samples, folds, total):
+            if folds is None:
+                assert total >= 2 * n_samples, "n_samples to big for the data"
+                folds = total // n_samples
+                return n_samples, folds, n_samples * folds
+            elif n_samples is None:
+                assert folds >= 2, "folds must be at least 2"
+                n_samples = total // folds
+                return n_samples, folds, folds * n_samples
+            else:
+                assert total >= 2 * n_samples, "n_samples to big for the data"
+                folds = min(folds, total // n_samples)
+                return n_samples, folds, n_samples * folds
+            
+        def _kflod(subdata):
+            subsample = len(subdata)
+            sample, fold, total = sample_fold_total(n_samples, folds, subsample)
+            sampling = np.reshape(np.random.choice(subsample, total, False), (fold, -1))
+            value = 0
+            selfvalue = 0
+            for i in range(fold):
+                train = subdata.iloc[sampling[i]]
+                test = subdata.iloc[sampling[(i + 1) % fold]]
+                self.run(train, method)
+                if validation == 'loglikelihood':
+                    selfvalue += method.loglikelihood(self.transform(train)) / sample
+                    value += method.loglikelihood(self.transform(test)) / sample
+                else:
+                    Xgen = self.transform(self.inv_transform(method.generate(sample)))
+                    Xtrain = self.transform(train)
+                    Xtest = self.transform(test)
+                    selfvalue += validation(Xtrain, Xgen)
+                    value += validation(Xtest, Xgen)
+            selfvalue /= fold
+            value /= fold
+            return (value, selfvalue) if return_fit else value
+        if target is None:
+            return self.for_target(target, _kflod)['all']
+        return self.for_target(target, _kflod)
+    
     def generate(self, n_samples, method=None, target=None, **model_args):
         method = self.method if method is None else method
         self.preprocess = 'whitening'
-        if target is None:
-            self.run(self.data, method, **model_args)
+        def _generate(subdata):
+            self.run(subdata, method, **model_args)
             return self.inv_transform(method.generate(n_samples))
-        else:
-            target_encoder = self.encoders[target]
-            new_data = []
-            for value in self.data[target].unique():
-                self.encoders[target] = enc.ignore(default=value)
-                self.run(self.data[self.data[target] == value], method, **model_args)
-                new_data.append(self.inv_transform(method.generate(n_samples)))
-            self.encoders[target] = target_encoder
-            return pd.concat(new_data)
+        return pd.concat(self.for_target(target, _generate).values())
             
     def fill(self, method=None, target=None, **model_args):
         method = self.method if method is None else method
         self.preprocess = 'normalize'
-        if target is None:
-            new_data = self.data.copy()
+        def _fill(subdata):
+            new_data = subdata.copy()
             nans = self.run(new_data, method, **model_args)
             new_data.iloc[nans] = self.inv_transform(
                 method.fill(self.transform(new_data[nans]))
             )
             return new_data
-        else:
-            target_encoder = self.encoders[target]
-            new_data = []
-            for value in self.data[target].unique():
-                self.encoders[target] = enc.ignore(default=value)
-                subdata = self.data[self.data[target] == value].copy()
-                nans = self.run(subdata, method, **model_args)
-                subdata.iloc[nans] = self.inv_transform(
-                    method.fill(self.transform(subdata[nans]))
-                )
-                new_data.append(subdata)
-            self.encoders[target] = target_encoder
-            return pd.concat(new_data)
+        return pd.concat(self.for_target(target, _fill).values())
         
     def extend(self, n_samples, max_samples='n_samples', method=None, target=None, **model_args):
         method = self.method if method is None else method
@@ -192,31 +187,13 @@ class DataHub:
             max_samples = self.samples
         else:
             max_samples = max(max_samples, n_samples)
-            
-        if method is None:
-            method = self.method
-        if target is None:
-            original_data = self.data.copy()
-            if n_samples <= self.samples:
-                return original_data.iloc[np.random.choice(self.samples, min(max_samples, self.samples), False)]
+        
+        def _extend(subdata):
+            subsample = len(subdata)
+            if n_samples <= subsample:
+                return subdata.iloc[np.random.choice(subsample, min(max_samples, subsample), False)]
             else:
-                self.run(self.data, method, **model_args)
-                new_data = self.inv_transform(method.generate(n_samples - self.samples))
-                return pd.concat([original_data, new_data])
-        else:
-            target_encoder = self.encoders[target]
-            original_data = []
-            new_data = []
-            for value in self.data[target].unique():
-                subdata = self.data[self.data[target] == value]
-                subsample = len(subdata)
-                if n_samples <= subsample:
-                    original_data.append(subdata.iloc[np.random.choice(subsample, min(max_samples, subsample), False)])
-                else:
-                    self.encoders[target] = enc.ignore(default=value)
-                    original_data.append(subdata)
-                    self.run(subdata, method, **model_args)
-                    Xnew = method.generate(n_samples - subsample)
-                    new_data.append(self.inv_transform(Xnew))
-            self.encoders[target] = target_encoder
-            return pd.concat(original_data + new_data)
+                self.run(subdata, method, **model_args)
+                new_data = self.inv_transform(method.generate(n_samples - subsample))
+                return pd.concat([subdata, new_data])
+        return pd.concat(self.for_target(target, _extend).values())
