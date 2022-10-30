@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from synthdata.generator import VAE
 
-n = 500
+n = 100
 
 phase = np.linspace(0, 2 * np.pi, n)
 noise = [np.random.normal(size=n) for _ in range(2)]
@@ -23,7 +23,7 @@ var = np.var(data, 0)
 X = (data - mean) / np.sqrt(var)
 
 vae = VAE()
-vae.fit(X, layers=4, enc_dim=3, epochs=500, lr=1e-1, batch_size=256)
+vae.fit(X)
 
 syn = 500
 S = vae.generate(syn)
@@ -35,7 +35,6 @@ tdata = T.numpy() * np.sqrt(var) + mean
 
 fig, ax = plt.subplots(1, 1)
 sp = ax.scatter(sdata[:,0], sdata[:,1], c='yellow', alpha=.2)
-# sp = ax.scatter(tdata[:,0], tdata[:,1], c='blue', alpha=.1)
 sp = ax.scatter(data[:,0], data[:,1], c='red', alpha=.1)
 
 plt.show()
