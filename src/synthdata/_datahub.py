@@ -65,10 +65,11 @@ class DataHub:
         if preprocess == 'normalize':
             self.mu = np.mean(X, 0)
             self.sigma = np.sqrt(np.var(X, 0))
+            self.sigma = np.maximum(self.sigma, 0) + 1e-6
         elif preprocess == 'whitening':
             self.mu = np.mean(X, 0)
             self.lambdas, self._U = np.linalg.eigh(np.cov(X.T))
-            self.lambdas += 1e-6
+            self.lambdas = np.maximum(self.lambdas, 0) + 1e-6
         
     def _preprocess(self, X, preprocess):
         if preprocess == 'normalize':
@@ -115,7 +116,7 @@ class DataHub:
     
     def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False):
         method = self.method if method is None else method
-        self.preprocess = 'normalize'
+        self.preprocess = 'whitening'
         if n_samples is None and folds is None:
             raise ValueError("No value specified for kfold validation")
         def sample_fold_total(n_samples, folds, total):

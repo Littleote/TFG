@@ -1,6 +1,8 @@
 import os
 os.chdir(os.path.dirname(os.path.realpath(__file__)) + '/..')
-os.sys.path.append(os.getcwd() + "/src")
+path = os.getcwd() + "/src"
+if path not in os.sys.path:
+    os.sys.path.append(path)
 
 import numpy as np
 import pandas as pd
