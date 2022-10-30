@@ -63,9 +63,9 @@ class GMM(BaseGenerator):
     
     def iterate(self):
         probs = self.k_probability().transpose()
-        resps = probs / np.sum(probs, 0)
+        resps = probs / np.maximum(np.sum(probs, 0), 1e-300)
         
-        t_resps = np.sum(resps, 1)
+        t_resps = np.maximum(np.sum(resps, 1), 1e-300)
         self.weights = t_resps / self.n
         self.means = np.transpose(resps.dot(self.X).transpose() / t_resps)
         self.covariances = np.array([
