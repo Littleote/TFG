@@ -20,8 +20,14 @@ def default_loss_function(recon_x, x, mu, logvar):
     return recLoss(recon_x, x) + torch.sqrt(KLD)
 
 class VAE(BaseGenerator, nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, device='auto', **kwargs):
         super().__init__(**kwargs)
+        if device == 'auto':
+            self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif type(device) == str:
+            self._device = torch.device(device)
+        else:
+            self._device = device
         
     def encode(self, x):
         enc = self.encoder(x)
@@ -29,7 +35,7 @@ class VAE(BaseGenerator, nn.Module):
 
     def reparametrize(self, mean, logvar):
         std = torch.exp(0.5 * logvar)
-        if torch.cuda.is_available() and False:
+        if self._device.type == 'cuda':
             eps = torch.cuda.FloatTensor(std.size()).normal_()
         else:
             eps = torch.FloatTensor(std.size()).normal_()
@@ -44,22 +50,26 @@ class VAE(BaseGenerator, nn.Module):
         z = self.reparametrize(mean, logvar)
         return self.decode(z), mean, logvar
     
-    def _train(self, X, epochs, criterion=default_loss_function, batches=None, batch_size=64, lr=1e-1, reduce_lr=True, patience=10, max_time=10):
-        batches = round(self.n / batch_size) if batches is None else batches
-        batch_size = int(np.ceil(self.n / batches))
-        train_loader = torch.utils.data.DataLoader(X, batch_size=batch_size, shuffle=True)
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        schedule = ReduceLROnPlateau(optimizer, patience=patience)
-        self.train()
+    def _train(self, X, epochs, criterion=default_loss_function, batches=None, batch_size=64,
+               lr=1e-1, reduce_lr=True, min_lr=1e-6, patience='auto', max_time=10):
+        if patience == 'auto':
+            patience = 5 if reduce_lr else 20
         loop = True
         epoch = 0
         best = None
         since = 0
         time = max_time + gettime()
         losses = []
+        batches = max(round(self.n / batch_size), 1) if batches is None else batches
+        batch_size = int(np.ceil(self.n / batches))
+        train_loader = torch.utils.data.DataLoader(X, batch_size=batch_size, shuffle=True)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        schedule = ReduceLROnPlateau(optimizer, patience=patience)
+        self.train()
         while loop:
             loss = 0
-            for batch in train_loader:
+            for _batch in train_loader:
+                batch = _batch
                 optimizer.zero_grad()
                 
                 outputs, mean, logvar = self.forward(batch)
@@ -77,7 +87,7 @@ class VAE(BaseGenerator, nn.Module):
                 epoch += 1
                 loop = epoch < epochs
             elif reduce_lr:
-                loop = optimizer.state_dict()['param_groups'][0]['lr'] > 1e-7
+                loop = optimizer.state_dict()['param_groups'][0]['lr'] > min_lr
             else:
                 since += 1
                 if best is None or best > loss:
@@ -87,18 +97,18 @@ class VAE(BaseGenerator, nn.Module):
             loop &= time > gettime()
             losses.append(loss)
         self.eval()
-        # import matplotlib.pyplot as plt
-        # plt.plot(losses)
-        # plt.show()
+        import matplotlib.pyplot as plt
+        plt.plot(losses)
+        plt.show()
         
-    def probabilities(self, X):
-        assert X.shape[1] == self.dim, "Size mismatch"
-        tX = torch.from_numpy(X)
-        with torch.no_grad():
-            mX, _ = self.encode(tX)
-            dist = torch.sum(torch.square(mX), 1)
-            probs = torch.exp(-dist / 2) / np.pow(np.sqrt(2 * np.pi), self.enc_dim)
-        return probs.numpy()
+    # def probabilities(self, X):
+    #     assert X.shape[1] == self.dim, "Size mismatch"
+    #     tX = torch.from_numpy(X).float()
+    #     with torch.no_grad():
+    #         mX, _ = self.encode(tX)
+    #         dist = torch.sum(torch.square(mX), 1)
+    #         probs = torch.exp(-dist / 2) / np.power(2 * np.pi, self.enc_dim / 2)
+    #     return probs.numpy().astype(float)
     
     def setup_run(self, X, phases, **args):
         self.enc_dim = phases[-1]
@@ -117,14 +127,15 @@ class VAE(BaseGenerator, nn.Module):
             for i in [e // 2 if e % 2 == 0 else -1 for e in range(2 * len(phases) - 2, 1, -1)]
             ])
         
+        self.to(self._device)
         self._train(X, **args)
         with torch.no_grad():
-            Y, _, _ = self.forward(X)
+            Y, m, l = self.forward(X)
         return recLoss(X, Y)
         
     
-    def _fit(self, X, phases='auto', enc_dim='auto', layers='auto', epochs='auto', **train_args):
-        tX = torch.from_numpy(X).float()
+    def _fit(self, X, phases='auto', enc_dim='auto', layers='auto', epochs='auto', auto_trials=8, **train_args):
+        tX = torch.from_numpy(X).float().to(self._device)
         self.n, self.dim = X.shape
         
         if phases == 'auto':
@@ -135,14 +146,15 @@ class VAE(BaseGenerator, nn.Module):
                     enc_dim = self._optimze_args['enc_dim']
                     layers = self._optimze_args['layers']
                     enc_dim = trial.suggest_int('enc_dim', 1, self.dim) if enc_dim == 'auto' else enc_dim
-                    layers = trial.suggest_int('layers', 1, 2 * self.dim) if layers == 'auto' else layers
+                    layers = trial.suggest_int('layers', 1, 5) if layers == 'auto' else layers
                     
-                    phases = np.array(np.round(np.exp(np.linspace(np.log(self.dim), np.log(enc_dim), layers + 1))), dtype=int)
+                    phases = torch.tensor(np.round(np.exp(np.linspace(np.log(self.dim), np.log(enc_dim), layers + 1))), dtype=int)
                     
                     return self.setup_run(tX, phases, epochs=epochs, **train_args)
                 
+                optuna.logging.set_verbosity(optuna.logging.ERROR)
                 study = optuna.create_study()
-                study.optimize(objective, n_trials=10)
+                study.optimize(objective, n_trials=auto_trials)
                 
                 self._optimze_args = study.best_params
             enc_dim = self._optimze_args['enc_dim']
@@ -154,6 +166,7 @@ class VAE(BaseGenerator, nn.Module):
             
     def _generate(self, size):
         with torch.no_grad():
-            S = torch.zeros((size, self.enc_dim), dtype=torch.float).normal_()
+            S = torch.zeros((size, self.enc_dim), device=self._device, dtype=torch.float).normal_()
+            S.to(self._device)
             X = self.decode(S)
-        return X.numpy()
+        return X.detach().cpu().numpy().astype(float)

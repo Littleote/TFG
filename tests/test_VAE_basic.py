@@ -30,10 +30,10 @@ vae.fit(X)
 syn = 500
 S = vae.generate(syn)
 with torch.no_grad():
-    T, M, V = vae.forward(torch.from_numpy(X).float())
+    T, M, V = vae.forward(torch.from_numpy(X).float().to(vae._device))
 
 sdata = S * np.sqrt(var) + mean
-tdata = T.numpy() * np.sqrt(var) + mean
+tdata = T.cpu().numpy() * np.sqrt(var) + mean
 
 fig, ax = plt.subplots(1, 1)
 sp = ax.scatter(sdata[:,0], sdata[:,1], c='yellow', alpha=.2)
@@ -41,8 +41,8 @@ sp = ax.scatter(data[:,0], data[:,1], c='red', alpha=.1)
 
 plt.show()
 
-M = M.numpy()
-V = np.exp(V.numpy())
+M = M.cpu().numpy()
+V = np.exp(V.cpu().numpy())
 
 D = (tdata - data) / np.sqrt(var)
 plt.scatter(D[:,0], D[:,1], c='brown', alpha=.1)
