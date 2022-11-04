@@ -19,6 +19,28 @@ class EncoderNone:
     
     def toNan(self, data):
         return np.isnan(data)
+
+class EncoderDiscrete:
+    def __init__(self, minimum=None, maximum=None):
+        self.size = 1
+        self.has_min = minimum is not None
+        self.has_max = maximum is not None
+        self.min = np.nan if minimum is None else minimum
+        self.max = np.nan if maximum is None else maximum
+    
+    def encode(self, data):
+        return data.astype(float)
+    
+    def decode(self, X):
+        X = np.round(X).astype(int)
+        if self.has_min:
+            X[X < self.min] = self.min
+        if self.has_max:
+            X[X > self.max] = self.max
+        return X
+    
+    def toNan(self, data):
+        return np.isnan(data)
     
 class EncoderLimit:
     def __init__(self, lower=None, upper=None, tails=True, influence=1):
@@ -118,7 +140,7 @@ class EncoderEquivalence:
         return X
     
     def decode(self, X):
-        X = X.astype(int)
+        X = np.round(X).astype(int)
         X[X < 0] = 0
         X[X >= self.symbols] = self.symbols - 1
         keys, val = np.unique(X, return_inverse=True)
