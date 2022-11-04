@@ -67,9 +67,10 @@ class GMM(BaseGenerator):
         
         t_resps = np.maximum(np.sum(resps, 1), 1e-300)
         self.weights = t_resps / self.n
-        self.means = np.transpose(resps.dot(self.X).transpose() / t_resps)
+        self.weights /= np.sum(self.weights)
+        self.means = np.transpose(resps.dot(self.X).T / t_resps)
         self.covariances = np.array([
-            (self.X - mean).transpose().dot(np.diag(resp).dot(self.X - mean)) / t_resp 
+            ((self.X - mean).T * resp) @ (self.X - mean) / t_resp 
             for t_resp, resp, mean in 
                 zip(t_resps, resps, self.means)
                 ])
@@ -116,6 +117,10 @@ class GMM(BaseGenerator):
             if best_llh is None or llh > best_llh:
                 best_llh = llh
                 best_params = (self.weights, self.means, self.covariances)
+            if time < gettime():
+                print(iters, time - gettime())
+            if iters < 0:
+                print(iters, time - gettime())
         self.weights, self.means, self.covariances = best_params
             
     def _generate(self, size):
