@@ -7,6 +7,7 @@ Data Class
 
 import numpy as np
 import pandas as pd
+from time import time as gettime
 
 import synthdata.encoder as enc
 
@@ -114,9 +115,9 @@ class DataHub:
             self.encoders[target] = target_encoder
         return results
     
-    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False):
+    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False, return_time=True):
         method = self.method if method is None else method
-        self.preprocess = 'whitening'
+        self.preprocess = 'normalize'
         if n_samples is None and folds is None:
             raise ValueError("No value specified for kfold validation")
         def sample_fold_total(n_samples, folds, total):
@@ -139,29 +140,42 @@ class DataHub:
             sampling = np.reshape(np.random.choice(subsample, total, False), (fold, -1))
             value = 0
             selfvalue = 0
+            fit_time = 0
+            eval_time = 0
             for i in range(fold):
                 train = subdata.iloc[sampling[i]]
                 test = subdata.iloc[sampling[(i + 1) % fold]]
+                start = gettime()
                 self.run(train, method)
+                fit_time += gettime() - start
                 if validation == 'loglikelihood':
-                    selfvalue += method.loglikelihood(self.transform(train)) / sample
+                    if return_fit:
+                        selfvalue += method.loglikelihood(self.transform(train)) / sample
+                    start = gettime()
                     value += method.loglikelihood(self.transform(test)) / sample
+                    eval_time += gettime() - start
                 else:
+                    start = gettime()
                     Xgen = self.transform(self.inv_transform(method.generate(sample)))
+                    eval_time += gettime() - start
                     Xtrain = self.transform(train)
                     Xtest = self.transform(test)
-                    selfvalue += validation(Xtrain, Xgen)
+                    if return_fit:
+                        selfvalue += validation(Xtrain, Xgen)
                     value += validation(Xtest, Xgen)
-            selfvalue /= fold
-            value /= fold
-            return (value, selfvalue) if return_fit else value
+            output = {'validation': value / fold}
+            if return_fit:
+                output |= {'train': selfvalue / fold}
+            if return_time:
+                output |= {'fitting': fit_time / fold, 'evaluation': eval_time / fold}
+            return output
         if target is None:
             return self.for_target(target, _kflod)['all']
         return self.for_target(target, _kflod)
     
     def generate(self, n_samples, method=None, target=None, **model_args):
         method = self.method if method is None else method
-        self.preprocess = 'whitening'
+        self.preprocess = 'normalize'
         def _generate(subdata):
             self.run(subdata, method, **model_args)
             return self.inv_transform(method.generate(n_samples))
@@ -181,7 +195,7 @@ class DataHub:
         
     def extend(self, n_samples, max_samples='n_samples', method=None, target=None, **model_args):
         method = self.method if method is None else method
-        self.preprocess = 'whitening'
+        self.preprocess = 'normalize'
         if max_samples == 'n_samples':
             max_samples = n_samples
         elif max_samples is None:
