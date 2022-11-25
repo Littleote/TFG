@@ -1,125 +1,98 @@
 # -*- coding: utf-8 -*-
 """
-Data Class
+DataHub
 
 @author: david
 """
 
 import numpy as np
 import pandas as pd
+import multiprocessing as mp
+import dill
 from time import time as gettime
 
 import synthdata.encoder as enc
+from ._transformer import Transformer
 
-class DataHub:
-    def __init__(self):
-        pass
+class DataHub(Transformer):
+    def __init__(self, cores=None, **kwrds):
+        super().__init__(**kwrds)
+        if not cores:
+            cores = 1
+        self.use_mp = (cores != 1)
+        self.cores = cores
     
     def load(self, data, encoders=dict(), method=None):
         assert len(data.shape) == 2, "data must be a 2d array of shape (n_samples, n_features)"
         
         self.data = data
-        self.labels = list(data.columns)
-        self.dtypes = data.dtypes.to_dict()
-        self.encoders = {
+        self.get_info(data)
+        self.add_encoders({
             label: enc.auto(data[label])
             for label in self.labels
-            } | encoders
+            } | encoders)
         self.method = None
         self.samples, self.features = data.shape
-    
-    def set_encoder(self, label, encoder):
-        self.encoders[label] = encoder
         
     def set_method(self, method):
         self.method = method
         
-    def transform(self, data=None, preprocess=None, refit=False):
-        preprocess = self.preprocess if preprocess is None else preprocess
-        if data is None:
-            data = self.data
-        Xfeatures = sum([enc.size for enc in self.encoders.values()])
-        X = np.zeros((data.shape[0], Xfeatures))
-        i = 0
-        for label in self.labels:
-            size = self.encoders[label].size
-            X[:,i:i + size] = self.encoders[label].encode(data[[label]])
-            i += size
-        if refit:
-            self._fitprocess(X[~np.isnan(X).any(1)], preprocess)
-        return self._preprocess(X, preprocess)
+    def set_cores(self, cores=None):
+        if not cores:
+            cores = 1
+        self.use_mp = (cores != 1)
+        self.cores = cores
     
-    def inv_transform(self, X, preprocess=None):
-        preprocess = self.preprocess if preprocess is None else preprocess
-        Xfeatures = sum([enc.size for enc in self.encoders.values()])
-        X = self._postprocess(X, preprocess)
-        assert X.shape[1] == Xfeatures, f"X n_features ({X.shape[1]}) different from expected ({sum([enc.size for enc in self.encoders.values()])})"
-        data = pd.DataFrame(columns=self.labels, dtype=object)
-        i = 0
-        for label in self.labels:
-            size = self.encoders[label].size
-            data[[label]] = self.encoders[label].decode(X[:,i:i + size])
-            i += size
-        return data.astype(self.dtypes)
+    MP_DATA_FILE = 'temp.pickle'
     
-    def _fitprocess(self, X, preprocess):
-        if preprocess == 'normalize':
-            self.mu = np.mean(X, 0)
-            self.sigma = np.sqrt(np.var(X, 0))
-            self.sigma = np.maximum(self.sigma, 0) + 1e-6
-        elif preprocess == 'whitening':
-            self.mu = np.mean(X, 0)
-            self.lambdas, self._U = np.linalg.eigh(np.cov(X.T))
-            self.lambdas = np.maximum(self.lambdas, 0) + 1e-6
-        
-    def _preprocess(self, X, preprocess):
-        if preprocess == 'normalize':
-            return (X - self.mu) / self.sigma
-        elif preprocess == 'whitening':
-            return (X - self.mu) @ self._U @ np.diag(1 / np.sqrt(self.lambdas)) @ self._U.T
-        else:
-            return X
-        
-    def _postprocess(self, X, preprocess):
-        if preprocess == 'normalize':
-            return X * self.sigma + self.mu
-        elif preprocess == 'whitening':
-            return X @ self._U @ np.diag(np.sqrt(self.lambdas)) @ self._U.T + self.mu
-        else:
-            return X
+    def pickle_data(self):
+        class PickleManager:
+            def __enter__(*_):
+                self.data.to_pickle(DataHub.MP_DATA_FILE)
+                return DataHub.MP_DATA_FILE
+            
+            def __exit__(*_):
+                import os
+                os.remove(DataHub.MP_DATA_FILE)
+                return False
+            
+        return PickleManager()
     
-    def run(self, data, method, **method_args):
-        nans = self.toNan(data)
-        if nans.all():
-            raise ValueError("All rows contain nan")
-        X = self.transform(data[~nans], refit=True)
-        method.fit(X, **method_args)
-        return nans
+    def _run_mp(what):
+        FUN, trans, (target, key), args, kwds = dill.loads(what)
+        data = pd.read_pickle(DataHub.MP_DATA_FILE)
+        subdata = data[data[target] == key]
+        return FUN(trans, subdata, *args, **kwds)
     
-    def toNan(self, data):
-        nans = np.full(data.shape[0], False)
-        for label in self.labels:
-            nans |= self.encoders[label].toNan(data[label])
-        return nans
-    
-    def for_target(self, target, FUN):
+    def for_target(self, target, FUN, *args, **kwargs):
         if target is None:
-            results = {'all': FUN(self.data)}
+            results = {'all': FUN(self, self.data, *args, **kwargs)}
         else:
             target_encoder = self.encoders[target]
             results = dict()
-            for value in self.data[target].unique():
-                self.encoders[target] = enc.ignore(default=value)
-                subdata = self.data[self.data[target] == value]
-                results[str(value)] = FUN(subdata)
+            if self.use_mp:
+                keys = self.data[target].unique()
+                values = []
+                neccesary_cores = len(keys)
+                allowed_cores = self.cores if self.cores > 0 else (mp.cpu_count() + self.cores)
+                cores = min(neccesary_cores, allowed_cores)
+                with mp.Pool(cores) as pool, self.pickle_data():
+                    for key in keys:
+                        self.encoders[target] = enc.ignore(default=key)
+                        trans = self.copy_transformer()
+                        what = [dill.dumps((FUN, trans, (target, key), args, kwargs))]
+                        values.append(pool.apply_async(DataHub._run_mp, what))
+                    for key, value in zip(keys, values):
+                        results[str(key)] = value.get()
+            else:
+                for value in self.data[target].unique():
+                    self.encoders[target] = enc.ignore(default=value)
+                    subdata = self.data[self.data[target] == value]
+                    results[str(value)] = FUN(self, subdata, *args, **kwargs)
             self.encoders[target] = target_encoder
         return results
     
-    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False, return_time=True):
-        method = self.method if method is None else method
-        self.preprocess = 'normalize'
-        if n_samples is None and folds is None:
-            raise ValueError("No value specified for kfold validation")
+    def _kfold(trans, subdata, method, n_samples, folds, validation, return_fit, return_time):
         def sample_fold_total(n_samples, folds, total):
             if folds is None:
                 assert total >= 2 * n_samples, "n_samples to big for the data"
@@ -133,82 +106,99 @@ class DataHub:
                 assert total >= 2 * n_samples, "n_samples to big for the data"
                 folds = min(folds, total // n_samples)
                 return n_samples, folds, n_samples * folds
-            
-        def _kflod(subdata):
-            subsample = len(subdata)
-            sample, fold, total = sample_fold_total(n_samples, folds, subsample)
-            sampling = np.reshape(np.random.choice(subsample, total, False), (fold, -1))
-            value = 0
-            selfvalue = 0
-            fit_time = 0
-            eval_time = 0
-            for i in range(fold):
-                train = subdata.iloc[sampling[i]]
-                test = subdata.iloc[sampling[(i + 1) % fold]]
-                start = gettime()
-                self.run(train, method)
-                fit_time += gettime() - start
-                if validation == 'loglikelihood':
-                    if return_fit:
-                        selfvalue += method.loglikelihood(self.transform(train)) / sample
-                    start = gettime()
-                    value += method.loglikelihood(self.transform(test)) / sample
-                    eval_time += gettime() - start
-                else:
-                    start = gettime()
-                    Xgen = self.transform(self.inv_transform(method.generate(sample)))
-                    eval_time += gettime() - start
-                    Xtrain = self.transform(train)
-                    Xtest = self.transform(test)
-                    if return_fit:
-                        selfvalue += validation(Xtrain, Xgen)
-                    value += validation(Xtest, Xgen)
-            output = {'validation': value / fold}
-            if return_fit:
-                output |= {'train': selfvalue / fold}
-            if return_time:
-                output |= {'fitting': fit_time / fold, 'evaluation': eval_time / fold}
-            return output
-        if target is None:
-            return self.for_target(target, _kflod)['all']
-        return self.for_target(target, _kflod)
-    
-    def generate(self, n_samples, method=None, target=None, **model_args):
-        method = self.method if method is None else method
-        self.preprocess = 'normalize'
-        def _generate(subdata):
-            self.run(subdata, method, **model_args)
-            return self.inv_transform(method.generate(n_samples))
-        return pd.concat(self.for_target(target, _generate).values())
-            
-    def fill(self, method=None, target=None, **model_args):
-        method = self.method if method is None else method
-        self.preprocess = 'normalize'
-        def _fill(subdata):
-            new_data = subdata.copy()
-            nans = self.run(new_data, method, **model_args)
-            new_data.iloc[nans] = self.inv_transform(
-                method.fill(self.transform(new_data[nans]))
-            )
-            return new_data
-        return pd.concat(self.for_target(target, _fill).values())
         
-    def extend(self, n_samples, max_samples='n_samples', method=None, target=None, **model_args):
+        subsample = len(subdata)
+        sample, fold, total = sample_fold_total(n_samples, folds, subsample)
+        sampling = np.reshape(np.random.choice(subsample, total, False), (fold, -1))
+        value = 0
+        selfvalue = 0
+        fit_time = 0
+        eval_time = 0
+        for i in range(fold):
+            train = subdata.iloc[sampling[i]]
+            test = subdata.iloc[sampling[(i + 1) % fold]]
+            start = gettime()
+            trans.run(train, method.fit)
+            fit_time += gettime() - start
+            if validation == 'loglikelihood':
+                if return_fit:
+                    selfvalue += method.loglikelihood(trans.transform(train)) / sample + np.log(trans.deformation())
+                start = gettime()
+                value += method.loglikelihood(trans.transform(test)) / sample + np.log(trans.deformation())
+                eval_time += gettime() - start
+            else:
+                start = gettime()
+                Xgen = trans.transform(trans.inv_transform(method.generate(sample)), process=False)
+                eval_time += gettime() - start
+                Xtrain = trans.transform(train, process=False)
+                Xtest = trans.transform(test, process=False)
+                if return_fit:
+                    selfvalue += validation(Xtrain, Xgen)
+                value += validation(Xtest, Xgen)
+        output = {'validation': value / fold}
+        if return_fit:
+            output |= {'train': selfvalue / fold}
+        if return_time:
+            output |= {'fitting_time': fit_time / fold, 'evaluation_time': eval_time / fold}
+        return output
+    
+    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False, return_time=True):
         method = self.method if method is None else method
-        self.preprocess = 'normalize'
+        if n_samples is None and folds is None:
+            raise ValueError("No value specified for kfold validation")
+        args = {
+            'method': method,
+            'n_samples': n_samples,
+            'folds': folds,
+            'validation': validation,
+            'return_fit': return_fit,
+            'return_time': return_time
+        }
+        if target is None:
+            return self.for_target(target, DataHub._kfold, **args)['all']
+        return self.for_target(target, DataHub._kfold, **args)
+
+    def _generate(trans, subdata, method, n_samples):
+        trans.run(subdata, method.fit)
+        return trans.inv_transform(method.generate(n_samples))
+    
+    def generate(self, n_samples, method=None, target=None):
+        method = self.method if method is None else method
+        
+        output = self.for_target(target, DataHub._generate, method=method, n_samples=n_samples)
+        return pd.concat(output.values(), ignore_index=True)
+        
+    def _fill(trans, subdata, method):
+        new_data = subdata.copy()
+        nans = trans.run(new_data, method.fit)
+        new_data.iloc[nans] = trans.inv_transform(
+            method.fill(trans.transform(new_data[nans]))
+        )
+        return new_data
+    
+    def fill(self, method=None, target=None):
+        method = self.method if method is None else method
+        
+        output = self.for_target(target, DataHub._fill, method)
+        return pd.concat(output.values(), ignore_index=True)
+     
+    def _extend(trans, subdata, method, n_samples, max_samples):
+        subsample = len(subdata)
+        if n_samples <= subsample:
+            return subdata.iloc[np.random.choice(subsample, min(max_samples, subsample), False)]
+        else:
+            trans.run(subdata, method.fit)
+            new_data = trans.inv_transform(method.generate(n_samples - subsample))
+            return pd.concat([subdata, new_data])
+    
+    def extend(self, n_samples, max_samples='n_samples', method=None, target=None):
+        method = self.method if method is None else method
         if max_samples == 'n_samples':
             max_samples = n_samples
         elif max_samples is None:
             max_samples = self.samples
         else:
             max_samples = max(max_samples, n_samples)
-        
-        def _extend(subdata):
-            subsample = len(subdata)
-            if n_samples <= subsample:
-                return subdata.iloc[np.random.choice(subsample, min(max_samples, subsample), False)]
-            else:
-                self.run(subdata, method, **model_args)
-                new_data = self.inv_transform(method.generate(n_samples - subsample))
-                return pd.concat([subdata, new_data])
-        return pd.concat(self.for_target(target, _extend).values())
+            
+        output = self.for_target(target, DataHub._extend, method, n_samples, max_samples)
+        return pd.concat(output.values(), ignore_index=True)

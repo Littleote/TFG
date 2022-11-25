@@ -12,7 +12,10 @@ from ._base import BaseGenerator
 class KDE(BaseGenerator):
     def __init__(self, var=lambda n, d: np.power(n, -1 / d), **kwargs):
         super().__init__(**kwargs)
-        self.var = var
+        if type(var) == type(lambda:0):
+            self.var = var
+        else:
+            self.var = lambda n, d: var
         
     def probabilities(self, X):
         assert X.shape[1] == self.dim, "Size mismatch"

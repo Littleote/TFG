@@ -7,7 +7,7 @@ Created on Mon Oct 10 18:37:51 2022
 
 import numpy as np
 
-from ._classes import EncoderNone, EncoderDiscrete, EncoderIgnore, EncoderOHE, EncoderLimit
+from ._classes import EncoderNone, EncoderDiscrete, EncoderIgnore, EncoderOHE, EncoderLimit, EncoderEquivalence
     
 def greater(value=0, include=True, influence=1):
     if include:
@@ -24,8 +24,13 @@ def lower(value=0, include=True, influence=1):
 def auto(data):
     if data.dtype == object:
         symbols = data.unique()
-        use = np.sqrt(data.shape[0]) / symbols.shape[0]
-        if use > 1:
+        n = data.shape[0]
+        use = np.sqrt(n) / n
+        if n == 1:
+            return EncoderIgnore(symbols[0])
+        elif n == 2:
+            return EncoderEquivalence(symbols)
+        elif use > 1 and n < 100:
             return EncoderOHE(list(symbols))
         else:
             return EncoderIgnore('Ignored')
