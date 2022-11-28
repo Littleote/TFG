@@ -150,12 +150,12 @@ class VAE(BaseGenerator, nn.Module):
         self.n, self.dim = X.shape
         
         if phases == 'auto':
-            self._optimze_args = {'enc_dim': enc_dim, 'layers': layers}
+            self._optimize_args = {'enc_dim': enc_dim, 'layers': layers}
             
             if enc_dim == 'auto' or layers == 'auto':
                 def objective(trial):
-                    enc_dim = self._optimze_args['enc_dim']
-                    layers = self._optimze_args['layers']
+                    enc_dim = self._optimize_args['enc_dim']
+                    layers = self._optimize_args['layers']
                     enc_dim = trial.suggest_int('enc_dim', 1, self.dim) if enc_dim == 'auto' else enc_dim
                     layers = trial.suggest_int('layers', 1, 5) if layers == 'auto' else layers
                     
@@ -167,9 +167,9 @@ class VAE(BaseGenerator, nn.Module):
                 study = optuna.create_study()
                 study.optimize(objective, n_trials=auto_trials)
                 
-                self._optimze_args = study.best_params
-            enc_dim = self._optimze_args['enc_dim']
-            layers = self._optimze_args['layers']
+                self._optimize_args |= study.best_params
+            enc_dim = self._optimize_args['enc_dim']
+            layers = self._optimize_args['layers']
             
             phases = np.array(np.round(np.exp(np.linspace(np.log(self.dim), np.log(enc_dim), layers + 1))), dtype=int)
             

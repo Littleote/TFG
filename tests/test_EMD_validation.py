@@ -11,13 +11,13 @@ from synthdata.validator import EMD
 
 test_1 = pd.read_csv("datasets/test_1.csv")
 d = sd.DataHub()
-d.load(test_1, preprocess="none")
+d.load(test_1)
 
 
 gmm = d.transform(d.generate(len(test_1), method=sd.generator.GMM()))
 kde = d.transform(d.generate(len(test_1), method=sd.generator.KDE()))
 vae = d.transform(d.generate(len(test_1), method=sd.generator.VAE()))
-original = d.transform()
+original = d.transform(d.data)
 
 print("GMM:", EMD(original, gmm))
 print("KDE:", EMD(original, kde))

@@ -28,18 +28,14 @@ def plotting(gen, name=None, x1=0, x2=1, y=2):
 import synthdata as sd
 import synthdata.generator as gen
 
-test_1 = pd.read_csv("datasets/test_1.csv")
-d = sd.DataHub()
-d.load(test_1)
-
-plotting(test_1, 'Original', y=4)
-plotting(d.generate(100, target='Species', method=gen.GMM()), 'Gaussian Mixture Model', y=4)
-plotting(d.generate(100, target='Species', method=gen.KDE()), 'Kernel Density Estimator', y=4)
-
-# test_2 = pd.read_csv("datasets/ideal-all.csv", sep=';')
-# d = sd.DataHub()
-# d.load(test_2)
-
-# # Massa gran per transformar-lo
-# X = d.transform()
-# Y = d.inv_transform(X)
+def main():
+    test_1 = pd.read_csv("datasets/test_1.csv")
+    d = sd.DataHub(cores=2)
+    d.load(test_1)
+    
+    plotting(test_1, 'Original', y=4)
+    plotting(d.generate(100, target='Species', method=gen.GMM()), 'Gaussian Mixture Model', y=4)
+    plotting(d.generate(100, target='Species', method=gen.KDE()), 'Kernel Density Estimator', y=4)
+    
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "numpy", "pandas", "dill", "torch", "optuna"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synthdata"
+version = "0.0.1"
+authors = [
+  { name="David Candela", email="David.Candela@autonoma.cat" },
+]
+description = "Generate synthetic data to fill, balance and expand datasets"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Littleote/TFG"
+"Bug Tracker" = "https://github.com/Littleote/TFG/issues"

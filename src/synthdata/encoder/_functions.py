@@ -24,13 +24,13 @@ def lower(value=0, include=True, influence=1):
 def auto(data):
     if data.dtype == object:
         symbols = data.unique()
-        n = data.shape[0]
-        use = np.sqrt(n) / n
-        if n == 1:
+        n = len(data)
+        s = len(symbols)
+        if s == 1:
             return EncoderIgnore(symbols[0])
-        elif n == 2:
+        elif s == 2:
             return EncoderEquivalence(symbols)
-        elif use > 1 and n < 100:
+        elif np.sqrt(n) > s and s < 100:
             return EncoderOHE(list(symbols))
         else:
             return EncoderIgnore('Ignored')

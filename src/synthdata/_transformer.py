@@ -76,14 +76,14 @@ class Transformer():
         sigma = np.sqrt(np.var(X, 0))
         sigma_1 = 1 / (np.maximum(sigma, 0) + 1e-6)
         auto_cov = sigma_1 * (sigma_1 * cov).T
-        conn = treshold < np.abs(auto_cov)
-        conn[nums, nums] = True
-        next_conn = conn @ conn
-        while not np.all(conn == next_conn):
-            conn = next_conn
-            next_conn = conn @ conn
-        relations = set([tuple(rel) for rel in conn])
-        blocks = [nums[np.array(rel)] for rel in relations]
+        related = treshold < np.abs(auto_cov)
+        related[nums, nums] = True
+        for i, row in enumerate(related):
+            conn = np.any(related[:, row], 1)
+            row = np.sum(related[conn], 0, dtype=bool)
+            related[conn] = False
+            related[i] = row
+        blocks = [nums[rel] for rel in related[related.any(1)]]
         signs = np.zeros(dim)
         for block in blocks:
             signs[block] = np.sign(auto_cov[block[0], block])
@@ -107,6 +107,12 @@ class Transformer():
             self.s_lambdas = np.sqrt(np.maximum(lambdas, 0)) + 1e-6
             # W = Z @ self.U @ np.diag(1 / self.s_lambdas) @ self.U.T
         
+    def row_nanmean(X):
+        bad = np.all(np.isnan(X), 1)
+        out = np.full(bad.shape, np.nan, dtype=float)
+        out[~bad] = np.nanmean(X[~bad], 1)
+        return out
+        
     def _preprocess(self, X):
         if self.transforms['normalize']:
             X = (X - self.mu) / self.sigma
@@ -114,7 +120,7 @@ class Transformer():
             X = X * self.sign
             Y = np.zeros((X.shape[0], self.dim_low))
             for i, block in enumerate(self.blocks):
-                Y[:,i] = np.nanmean(X[:,block], 1)
+                Y[:,i] = Transformer.row_nanmean(X[:,block])
             X = Y
         if self.transforms['whitening']:
             X = X @ self.U @ np.diag(1 / self.s_lambdas) @ self.U.T

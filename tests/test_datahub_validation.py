@@ -20,8 +20,8 @@ kde_llh = d.kfold_validation(folds=3, method=gen.KDE(), return_fit=True)
 gmm_emd = d.kfold_validation(folds=3, method=gen.GMM(), validation=val.EMD)
 kde_emd = d.kfold_validation(folds=3, method=gen.KDE(), validation=val.EMD)
 
-print("Mean loglikelihood of GMM: ", gmm_llh[0], " (Mean train llh: ", gmm_llh[1], ")", sep="")
-print("Mean loglikelihood of KDE: ", kde_llh[0], " (Mean train llh: ", kde_llh[1], ")", sep="")
+print("Mean loglikelihood of GMM: ", gmm_llh['validation'], " (Mean train llh: ", gmm_llh['train'], ")", sep="")
+print("Mean loglikelihood of KDE: ", kde_llh['validation'], " (Mean train llh: ", kde_llh['train'], ")", sep="")
 
-print("Mean EMD of GMM:", gmm_emd)
-print("Mean EMD of KDE:", kde_emd)
+print("Mean EMD of GMM:", gmm_emd['validation'])
+print("Mean EMD of KDE:", kde_emd['validation'])

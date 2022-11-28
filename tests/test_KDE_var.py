@@ -62,7 +62,7 @@ def main():
         plt.plot(var, kde_llh_[ideal], label="KDE (Train)", color='orange', dashes=[1, 2, 5, 2])
         plt.title("Ideal: " + ideal)
         plt.xscale("log")
-        plt.ylim([0, 3])
+        plt.ylim([0.9 * np.min(kde_llh_[ideal]), 1.1 * np.max(kde_llh_[ideal])])
         plt.legend()
         plt.show()
         

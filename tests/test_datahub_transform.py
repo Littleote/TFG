@@ -12,5 +12,5 @@ test_1 = pd.read_csv("datasets/test_1.csv")
 d = sd.DataHub()
 d.load(test_1)
 
-X = d.transform()
+X = d.transform(d.data, refit=True)
 Y = d.inv_transform(X)

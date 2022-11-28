@@ -76,7 +76,7 @@ class DataHub(Transformer):
                 neccesary_cores = len(keys)
                 allowed_cores = self.cores if self.cores > 0 else (mp.cpu_count() + self.cores)
                 cores = min(neccesary_cores, allowed_cores)
-                with mp.Pool(cores) as pool, self.pickle_data():
+                with self.pickle_data(), mp.Pool(cores) as pool:
                     for key in keys:
                         self.encoders[target] = enc.ignore(default=key)
                         trans = self.copy_transformer()

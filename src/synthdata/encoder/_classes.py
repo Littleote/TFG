@@ -128,6 +128,7 @@ class EncoderEquivalence:
         symbols = np.array(symbols, dtype=object)
         self.size = 1
         self.symbols = len(symbols)
+        assert self.symbols >= 1, "There must be at least one value"
         values = np.arange(self.symbols)
         self.forward = {symb: val for symb, val in zip(symbols, values)}
         self.backward = {val: symb for symb, val in zip(symbols, values)}
@@ -143,11 +144,11 @@ class EncoderEquivalence:
         X = np.round(X).astype(int)
         X[X < 0] = 0
         X[X >= self.symbols] = self.symbols - 1
-        keys, val = np.unique(X, return_inverse=True)
-        data = np.zeros(X.shape)
-        for i, key in enumerate(keys):
-            data[val == i] = self.backward.get(key)
-        return X
+        X = np.round(X).astype(int)
+        data = np.full(X.shape, self.backward[0], object)
+        for val in range(1, self.symbols):
+            data[X == val] = self.backward.get(val)
+        return data
     
     def toNan(self, data):
         valid = np.vectorize(lambda x: x in self.forward.keys())

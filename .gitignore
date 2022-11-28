@@ -1,3 +1,9 @@
+# Python
 *.pyc
+*egg-info*
+dist/*
+
+# Other
 ideal-all.*
 ignore/*
+.venv/*
