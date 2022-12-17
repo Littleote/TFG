@@ -14,7 +14,7 @@ Classe per manejar les dades i encarregarse de cridar a totes les funcions neces
     En el cas d'un únic core (1 o None) no es paral·lelitzarà.
     Aquest valor es pot cambiar amb `datahub.set_cores(cores: 'int' = 1)`.
     + **model** (`Generator`): Model a utilitzar per defecte per analitzar les dades.
-    Aquest valor es pot cambiar amb `datahub.set_model(model: 'Model' = None)`.
+    Aquest valor es pot cambiar amb `datahub.set_model(model: 'Generator' = None)`.
     + **kwargs**: Arguments pels pasos extra de la transformació.
         + **normalize** (`bool`): Normalitzar o no les dades. (`True` per defecte)
         + **remove_cov** (`bool`): Unificar dades amb alta covariancia o no. (`True` per defecte)
@@ -82,7 +82,7 @@ Funció per augmentar (o disminuir) la mida del dataset amb noves dades sintéti
     + **llh_tolerance** (`float`): Tolerancia màxima de la logversemblança per finalitzar el mètode d'_expectació-maximització_.
     + **attempts** (`int`): Nombre d'execucions del mètode d'_expectació-maximització_.
     + **criterion** (`str`): Criteri per determinar el millor valor de `k`.
-    Pot tenir el valor `Bayesian`, `b` o `BIC` pel criteri d'informació bayesia, el valor `Akaike`, `a` o `AIC` pel criteri d'informació d'Akaike i el valor `Cross.Validation` o `CV` pel criteri d'informació de validació creuada. (No importa majúscules ni minúscules)
+    Pot tenir el valor `Bayesian`, `b` o `BIC` pel criteri d'informació bayesia, el valor `Akaike`, `a` o `AIC` pel criteri d'informació d'Akaike i el valor `Cross-Validation` o `CV` pel criteri d'informació de validació creuada. (No importa majúscules ni minúscules)
     
 - `generator = synthdata.generator.KDE(h: 'float | str | function' = 'tune')`
     + **h** (`float`, `str` o `function`): Valor d'`h` o funció per obtenir-lo.
@@ -102,7 +102,7 @@ Funció per augmentar (o disminuir) la mida del dataset amb noves dades sintéti
     + **epochs** (`int` o `None`): Numero d'époques d'execució de la xarxa.
     Si és `None`, l'entrenament de la xarxa acabarà quan el ritme d'aprenentatge hagi arribat al mínim o quan la xarxa hagi deixat de millorar durant `patience` époques si `reduce_learning_rate` és fals.
     + **search_trials** (`int`): Nombre d'iteracions per fer la cerca dels parametres per la mida de la xarxa si aquests no s'han especificat.
-    + **batches** (`int | None`): Nombre de tandes en que dividir les dades d'entrenament.
+    + **batches** (`int` o `None`): Nombre de tandes en que dividir les dades d'entrenament.
     Si és `None`,
     + **batch_size** (`int` o `None`): Mida de les tandes de les dades d'entrenament.
     Si és `None`,
