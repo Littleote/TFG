@@ -9,14 +9,14 @@ import pandas as pd
 import synthdata as sd
 from synthdata.validator import EMD
 
-test_1 = pd.read_csv("datasets/test_1.csv")
+iris = pd.read_csv("datasets/iris_dataset.csv")
 d = sd.DataHub()
-d.load(test_1)
+d.load(iris)
 
 
-gmm = d.transform(d.generate(len(test_1), method=sd.generator.GMM()))
-kde = d.transform(d.generate(len(test_1), method=sd.generator.KDE()))
-vae = d.transform(d.generate(len(test_1), method=sd.generator.VAE()))
+gmm = d.transform(d.generate(len(iris), model=sd.generator.GMM()))
+kde = d.transform(d.generate(len(iris), model=sd.generator.KDE()))
+vae = d.transform(d.generate(len(iris), model=sd.generator.VAE()))
 original = d.transform(d.data)
 
 print("GMM:", EMD(original, gmm))

@@ -3,6 +3,10 @@
 *egg-info*
 dist/*
 
+# Datasets
+ideal-all.*
+ideal_reduced_dataset.csv
+
 # Other
 ideal-all.*
 ignore/*

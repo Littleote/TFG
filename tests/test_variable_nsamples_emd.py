@@ -14,18 +14,18 @@ import synthdata.generator as gen
 from synthdata.encoder import ignore
 import synthdata.validator as val
 
-def ideal_FUN(trans, subdata, n_samples, folds):
+def ideal_FUN(trans, subdata, samples, repeat, folds):
     X = trans.transform(subdata, process=False)
-    ind = np.random.choice(len(subdata), (folds, n_samples), False)
+    ind = np.random.choice(len(subdata), (folds, samples))
     emd = 0
     for fold in range(folds):
         emd += val.EMD(X[ind[fold]], X[ind[(fold + 1) % folds]])
-    return emd / folds
+    return np.full(repeat, emd / folds)
 
 def main():
-    test_2 = pd.read_csv("datasets/ideal-all.csv", sep=';')
+    ideal_reduced = pd.read_csv("datasets/ideal_reduced_dataset.csv", sep=';')
     d = sd.DataHub(cores=3)
-    d.load(test_2, encoders = {
+    d.load(ideal_reduced, encoders = {
         'time_x': ignore(0),
         'time_y': ignore(0),
         'time_x.1': ignore(0),
@@ -38,23 +38,24 @@ def main():
         'P_list': ignore()
         })
     
-    ideals = np.sort(test_2['ideal'].unique())
+    ideals = np.sort(d.data['ideal'].unique())
     sections = 10
     interval = (5, 500)
-    n_samples = np.round(np.square(np.linspace(np.sqrt(interval[0]), np.sqrt(interval[1]), sections))).astype(int)
+    samples = np.round(np.square(np.linspace(np.sqrt(interval[0]), np.sqrt(interval[1]), sections))).astype(int)
     ideal_emd = {str(ideal): np.zeros(sections) for ideal in ideals}
     
-    methods = {
+    models = {
         'gmm': gen.GMM(),
         'kde': gen.KDE(),
         'vae': gen.VAE(),
-        'vae_cpu': gen.VAE(device='cpu')
+        'vae (cpu)': gen.VAE(device='cpu')
     }
-    names = methods.keys()
+    names = models.keys()
     colors = ('blue', 'orange', 'green', 'red')
     
     kfold_args = {
         'folds': 7,
+        'validation_samples': 100,
         'return_fit': True,
         'return_time': True,
         'target': 'ideal',
@@ -74,16 +75,16 @@ def main():
     start = gettime()
     print("Tunning VAE hyperparameters ... ", end='')
     present = d.transform(d.extend(interval[1], target='ideal'), refit=True)
-    methods['vae'].prefit(present)
-    methods['vae_cpu'].prefit(present)
+    models['vae'].prefit(present)
+    models['vae (cpu)'].prefit(present)
     print(f"in {gettime() - start} seconds")
     
     for i in range(sections):
         print(f"Progress: {i} / {sections}, {np.round(100 * i / sections, 2)}%")
         for name in names:
             start = gettime()
-            print(f"Running {name.upper()} for n_samples = {n_samples[i]} ... ", end='')
-            emd_results = d.kfold_validation(n_samples=n_samples[i], **kfold_args, method=methods[name])
+            print(f"Running {name.upper()} for samples = {samples[i]} ... ", end='')
+            emd_results = d.kfold_validation(train_samples=samples[i], **kfold_args, model=models[name])
             print(f"in {np.round(gettime() - start, 4)} seconds")
             for ideal in ideals:
                 ideal = str(ideal)
@@ -92,20 +93,17 @@ def main():
                 time_fit[name][i] += emd_results[ideal]['fitting_time']
                 time_eval[name][i] += emd_results[ideal]['evaluation_time']
             
-        _ideal_emd = d.for_target(target='ideal', FUN=ideal_FUN, n_samples=n_samples[i], folds=15)
-        for ideal in ideals:
-            ideal = str(ideal)
-            ideal_emd[ideal][i] = _ideal_emd[ideal]
+    ideal_emd = d.for_target(target='ideal', FUN=ideal_FUN, samples=100, repeat=sections, folds=15)
     
     for i, name in enumerate(names):
-        plt.plot(n_samples, time_fit[name], label=name.upper(), color=colors[i])
+        plt.plot(samples, time_fit[name], label=name.upper(), color=colors[i])
     plt.title("Fitting time")
     plt.yscale('log')
     plt.legend()
     plt.show()
     
     for i, name in enumerate(names):
-        plt.plot(n_samples, time_eval[name], label=name.upper(), color=colors[i])
+        plt.plot(samples, time_eval[name], label=name.upper(), color=colors[i])
     plt.title("Evaulation time")
     plt.yscale('log')
     plt.legend()
@@ -113,10 +111,10 @@ def main():
     
     for ideal in ideals:
         ideal = str(ideal)
-        plt.plot(n_samples, ideal_emd[ideal], label="Ideal", color='black')
+        plt.plot(samples, ideal_emd[ideal], label="Ideal", color='black')
         for i, name in enumerate(names):
-            plt.plot(n_samples, emd_val[name][ideal], label=f"{name.upper()} (Validation)", color=colors[i])
-            plt.plot(n_samples, emd_train[name][ideal], label=f"{name.upper()} (Train)", color=colors[i], dashes=[1, 2, 5, 2])
+            plt.plot(samples, emd_val[name][ideal], label=f"{name.upper()} (Validation)", color=colors[i])
+            plt.plot(samples, emd_train[name][ideal], label=f"{name.upper()} (Train)", color=colors[i], dashes=[1, 2, 5, 2])
         plt.title("Ideal: " + ideal)
         plt.yscale('log')
         plt.legend()

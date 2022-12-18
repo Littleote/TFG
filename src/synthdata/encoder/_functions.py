@@ -7,21 +7,68 @@ Created on Mon Oct 10 18:37:51 2022
 
 import numpy as np
 
-from ._classes import EncoderNone, EncoderDiscrete, EncoderIgnore, EncoderOHE, EncoderLimit, EncoderEquivalence
+from ._classes import EncoderNone, EncoderDiscrete, EncoderIgnore, EncoderOHE, EncoderLimit, EncoderScale
     
-def greater(value=0, include=True, influence=1):
+def greater(value: 'float' = 0, include: 'bool' = True, influence: 'float' = 1):
+    """
+    Encoder for values greater than value.
+
+    Parameters
+    ----------
+    value : 'float', optional
+        Minimum value. The default is 0.
+    include : 'bool', optional
+        Include minimum in posible values. The default is True.
+    influence : 'float', optional
+        Range of improbable values near the minimum when not included. The default is 1.
+
+    Returns
+    -------
+    Encoder.
+    
+    """
     if include:
         return EncoderLimit(lower=value, tails=False)
     else:
         return EncoderLimit(lower=value, tails=True, influence=influence)
     
-def lower(value=0, include=True, influence=1):
+def lower(value: 'float' = 0, include: 'bool' = True, influence: 'float' = 1):
+    """
+    Encoder for values greater than value.
+
+    Parameters
+    ----------
+    value : 'float', optional
+        Minimum value. The default is 0.
+    include : 'bool', optional
+        Include minimum in posible values. The default is True.
+    influence : 'float', optional
+        Range of improbable values near the minimum when not included. The default is 1.
+
+    Returns
+    -------
+    Encoder.
+    
+    """
     if include:
         return EncoderLimit(upper=value, tails=False)
     else:
         return EncoderLimit(upper=value, tails=True, influence=influence)
 
-def auto(data):
+def auto(data: 'DataFrame'):
+    """
+    Select Encoder based on dataframe column.
+
+    Parameters
+    ----------
+    data : 'DataFrame'
+        Data frame column.
+
+    Returns
+    -------
+    Encoder.
+
+    """
     if data.dtype == object:
         symbols = data.unique()
         n = len(data)
@@ -29,7 +76,7 @@ def auto(data):
         if s == 1:
             return EncoderIgnore(symbols[0])
         elif s == 2:
-            return EncoderEquivalence(symbols)
+            return EncoderScale(symbols)
         elif np.sqrt(n) > s and s < 100:
             return EncoderOHE(list(symbols))
         else:

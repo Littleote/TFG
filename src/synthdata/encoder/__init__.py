@@ -7,6 +7,6 @@ from ._classes import EncoderDiscrete as discrete
 from ._classes import EncoderIgnore as ignore
 from ._classes import EncoderLimit as limit
 from ._classes import EncoderOHE as OHE
-from ._classes import EncoderEquivalence as Equivalence
+from ._classes import EncoderScale as scale
 
-__all__ = ['auto', 'greater', 'lower', 'none', 'discrete', 'ignore', 'limit', 'OHE', 'Equivalence']
+__all__ = ['auto', 'greater', 'lower', 'none', 'discrete', 'ignore', 'limit', 'OHE', 'scale']

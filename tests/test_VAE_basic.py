@@ -24,7 +24,7 @@ var = np.var(data, 0)
 
 X = (data - mean) / np.sqrt(var)
 
-vae = VAE(fit_enc_dim=2)
+vae = VAE(latent_dimension=2)
 vae.fit(X)
 
 syn = 500

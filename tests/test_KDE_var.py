@@ -14,9 +14,9 @@ import synthdata.validator as val
 from synthdata.encoder import ignore
 
 def main():
-    test_2 = pd.read_csv("datasets/ideal-all.csv", sep=';')
+    ideal_reduced = pd.read_csv("datasets/ideal_reduced_dataset.csv", sep=';')
     d = sd.DataHub(remove_cov=False)
-    d.load(test_2, encoders = {
+    d.load(ideal_reduced, encoders = {
         'time_x': ignore(0),
         'time_y': ignore(0),
         'time_x.1': ignore(0),
@@ -29,17 +29,18 @@ def main():
         'P_list': ignore()
         })
     
-    ideals = np.sort(test_2['ideal'].unique())
+    ideals = np.sort(ideal_reduced['ideal'].unique())
     sections = 50
     kfold_args = {
-        'n_samples': 100,
+        'train_samples': 100,
+        'validation_samples': 100,
         'folds': 5,
         'validation': val.EMD,
         'return_fit': True,
         'return_time': False,
         'target': 'ideal'
     }
-    var = np.square(np.linspace(np.sqrt(1e-6), np.sqrt(1), sections))
+    h_range = np.square(np.linspace(np.sqrt(1e-6), np.sqrt(1), sections))
     kde_llh = {str(ideal): np.zeros(sections) for ideal in ideals}
     kde_llh_ = {str(ideal): np.zeros(sections) for ideal in ideals}
     
@@ -50,7 +51,7 @@ def main():
     
     for i in range(sections):
         print(f"Progress: {i} / {sections}, {np.round(100 * i / sections, 2)}%")
-        _kde_llh = d.kfold_validation(**kfold_args, method=gen.KDE(var=var[i]))
+        _kde_llh = d.kfold_validation(**kfold_args, model=gen.KDE(h=h_range[i]))
         for ideal in ideals:
             ideal = str(ideal)
             kde_llh[ideal][i] = _kde_llh[ideal]['validation']
@@ -58,8 +59,8 @@ def main():
     
     for ideal in ideals:
         ideal = str(ideal)
-        plt.plot(var, kde_llh[ideal], label="KDE (Validation)", color='orange')
-        plt.plot(var, kde_llh_[ideal], label="KDE (Train)", color='orange', dashes=[1, 2, 5, 2])
+        plt.plot(h_range, kde_llh[ideal], label="KDE (Validation)", color='orange')
+        plt.plot(h_range, kde_llh_[ideal], label="KDE (Train)", color='orange', dashes=[1, 2, 5, 2])
         plt.title("Ideal: " + ideal)
         plt.xscale("log")
         plt.ylim([0.9 * np.min(kde_llh_[ideal]), 1.1 * np.max(kde_llh_[ideal])])

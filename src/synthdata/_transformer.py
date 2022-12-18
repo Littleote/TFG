@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 class Transformer():
-    def __init__(self, normalize=True, remove_cov=True, whitening=False):
+    def __init__(self, normalize: 'bool' = True, remove_cov: 'bool' = True, whitening: 'bool' = False):
         super().__init__()
         self.encoders = dict()
         self.dtypes = dict()
@@ -22,10 +22,14 @@ class Transformer():
             "whitening": whitening
         }
     
-    def add_encoders(self, encoders):
+    def add_encoders(self, encoders: 'dict[str, Encoder]'):
         self.encoders |= encoders
     
-    def set_encoder(self, label, encoder):
+    def set_encoder(self, label: 'str', encoder: 'Encoder | str'):
+        if isinstance(encoder, str):
+            import synthdata.encoder as enc
+            if encoder.lower() in ['ignore']:
+                encoder = enc.ignore()
         self.encoders[label] = encoder
         
     def get_info(self, data):

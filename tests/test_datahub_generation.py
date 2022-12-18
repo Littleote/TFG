@@ -29,13 +29,13 @@ import synthdata as sd
 import synthdata.generator as gen
 
 def main():
-    test_1 = pd.read_csv("datasets/test_1.csv")
+    iris = pd.read_csv("datasets/iris_dataset.csv")
     d = sd.DataHub(cores=2)
-    d.load(test_1)
+    d.load(iris)
     
-    plotting(test_1, 'Original', y=4)
-    plotting(d.generate(100, target='Species', method=gen.GMM()), 'Gaussian Mixture Model', y=4)
-    plotting(d.generate(100, target='Species', method=gen.KDE()), 'Kernel Density Estimator', y=4)
+    plotting(iris, 'Original', y=4)
+    plotting(d.generate(100, target='Species', model=gen.GMM()), 'Gaussian Mixture Model', y=4)
+    plotting(d.generate(100, target='Species', model=gen.KDE()), 'Kernel Density Estimator', y=4)
     
 if __name__ == "__main__":
     main()

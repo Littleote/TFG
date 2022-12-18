@@ -8,9 +8,9 @@ import pandas as pd
 
 import synthdata as sd
 
-test_1 = pd.read_csv("datasets/test_1.csv")
+iris = pd.read_csv("datasets/iris_dataset.csv")
 d = sd.DataHub()
-d.load(test_1)
+d.load(iris)
 
 X = d.transform(d.data, refit=True)
 Y = d.inv_transform(X)

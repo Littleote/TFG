@@ -25,7 +25,7 @@ X = (data - mean) / np.sqrt(var)
 
 ### fit, generate i fill test
 
-gmm = GMM(fit_n_attempts=5)
+gmm = GMM(attempts=5)
 gmm.fit(X)
 
 syn = 1000
@@ -62,7 +62,7 @@ probs = []
 ks = []
 for j in range(10):
     k = j + 1
-    gmm.set_k(k)
+    gmm._set_k(k)
     gmm.fit(X)
     
     probs.append(

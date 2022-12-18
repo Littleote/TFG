@@ -12,9 +12,9 @@ from synthdata.encoder import ignore
 from time import time as gettime
 
 def main():
-    test_2 = pd.read_csv("datasets/ideal-all.csv", sep=';')
+    ideal_reduced = pd.read_csv("datasets/ideal_reduced_dataset.csv", sep=';')
     d = sd.DataHub()
-    d.load(test_2, encoders = {
+    d.load(ideal_reduced, encoders = {
         'time_x': ignore(0),
         'time_y': ignore(0),
         'time_x.1': ignore(0),
@@ -28,8 +28,8 @@ def main():
         })
     
     device = 'cuda:0'
-    model = gen.VAE(device=device, fit_layers=5, fit_enc_dim=15)
-    subset = d.extend(10000, 20000, target='ideal')
+    model = gen.VAE(device=device, layers=5, latent_dimension=15)
+    subset = d.extend(2000, target='ideal')
     start = gettime()
     d.run(subset, model.fit)
     delta = gettime() - start

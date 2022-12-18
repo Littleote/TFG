@@ -14,9 +14,9 @@ import synthdata.generator as gen
 from synthdata.encoder import ignore
 
 def main():
-    test_2 = pd.read_csv("datasets/ideal-all.csv", sep=';')
+    ideal_reduced = pd.read_csv("datasets/ideal_reduced_dataset.csv", sep=';')
     d = sd.DataHub(cores=4)
-    d.load(test_2, encoders = {
+    d.load(ideal_reduced, encoders = {
         'time_x': ignore(0),
         'time_y': ignore(0),
         'time_x.1': ignore(0),
@@ -29,15 +29,29 @@ def main():
         'P_list': ignore()
         })
     
-    ideals = np.sort(test_2['ideal'].unique())
+    ideals = np.sort(d.data['ideal'].unique())
     sections = 10
-    n_samples = np.round(np.square(np.linspace(np.sqrt(5), np.sqrt(500), sections))).astype(int)
-    gmm_time = np.zeros(sections)
-    kde_time = np.zeros(sections)
-    gmm_llh = {str(ideal): np.zeros(sections) for ideal in ideals}
-    gmm_llh_ = {str(ideal): np.zeros(sections) for ideal in ideals}
-    kde_llh = {str(ideal): np.zeros(sections) for ideal in ideals}
-    kde_llh_ = {str(ideal): np.zeros(sections) for ideal in ideals}
+    interval = (5, 500)
+    n_samples = np.round(np.square(np.linspace(np.sqrt(interval[0]), np.sqrt(interval[1]), sections))).astype(int)
+    
+    models = {
+        'gmm (Multivariate)': gen.GMM(multivariate=True),
+        'kde (Tuned)': gen.KDE(h='tune')
+    }
+    names = models.keys()
+    colors = ('blue', 'red')
+    
+    kfold_args = {
+        'folds': 7,
+        'return_fit': True,
+        'return_time': True,
+        'target': 'ideal',
+    }
+    
+    time_fit = {name: np.zeros(sections) for name in names}
+    time_eval = {name: np.zeros(sections) for name in names}
+    llh_train = {name: {str(ideal): np.zeros(sections) for ideal in ideals} for name in names}
+    llh_val = {name: {str(ideal): np.zeros(sections) for ideal in ideals} for name in names}
     
     sizes = d.for_target('ideal', lambda trans, x: len(x))
     for ideal in ideals:
@@ -46,36 +60,37 @@ def main():
     
     for i in range(sections):
         print(f"Progress: {i} / {sections}, {np.round(100 * i / sections, 2)}%")
-        start = gettime()
-        print(f"Running GMM for n_seamples = {n_samples[i]} ... ", end='')
-        _gmm_llh = d.kfold_validation(n_samples=n_samples[i], folds=5, target='ideal', return_fit=True, method=gen.GMM())
-        gmm_time[i] = gettime() - start
-        print(f"in {gmm_time[i]} seconds")
-        start = gettime()
-        print(f"Running KDE for n_seamples = {n_samples[i]} ... ", end='')
-        _kde_llh = d.kfold_validation(n_samples=n_samples[i], folds=5, target='ideal', return_fit=True, method=gen.KDE())
-        kde_time[i] = gettime() - start
-        print(f"in {kde_time[i]} seconds")
-        for ideal in ideals:
-            ideal = str(ideal)
-            gmm_llh[ideal][i] = _gmm_llh[ideal]['validation']
-            gmm_llh_[ideal][i] = _gmm_llh[ideal]['train']
-            kde_llh[ideal][i] = _kde_llh[ideal]['validation']
-            kde_llh_[ideal][i] = _kde_llh[ideal]['train']
+        for name in names:
+            start = gettime()
+            print(f"Running {name.upper()} for n_samples = {n_samples[i]} ... ", end='')
+            emd_results = d.kfold_validation(train_samples=n_samples[i], **kfold_args, model=models[name])
+            print(f"in {np.round(gettime() - start, 4)} seconds")
+            for ideal in ideals:
+                ideal = str(ideal)
+                llh_val[name][ideal][i] = emd_results[ideal]['validation']
+                llh_train[name][ideal][i] = emd_results[ideal]['train']
+                time_fit[name][i] += emd_results[ideal]['fitting_time']
+                time_eval[name][i] += emd_results[ideal]['evaluation_time']
     
-    plt.plot(n_samples, gmm_time, label="GMM", color='blue')
-    plt.plot(n_samples, kde_time, label="KDE", color='orange')
-    plt.title("Execution time")
+    for i, name in enumerate(names):
+        plt.plot(n_samples, time_fit[name], label=name.upper(), color=colors[i])
+    plt.title("Fitting time")
+    plt.yscale('log')
+    plt.legend()
+    plt.show()
+    
+    for i, name in enumerate(names):
+        plt.plot(n_samples, time_eval[name], label=name.upper(), color=colors[i])
+    plt.title("Evaulation time")
     plt.yscale('log')
     plt.legend()
     plt.show()
     
     for ideal in ideals:
         ideal = str(ideal)
-        plt.plot(n_samples, gmm_llh[ideal], label="GMM (Validation)", color='blue')
-        plt.plot(n_samples, gmm_llh_[ideal], label="GMM (Train)", color='blue', dashes=[1, 2, 5, 2])
-        plt.plot(n_samples, kde_llh[ideal], label="KDE (Validation)", color='orange')
-        plt.plot(n_samples, kde_llh_[ideal], label="KDE (Train)", color='orange', dashes=[1, 2, 5, 2])
+        for i, name in enumerate(names):
+            plt.plot(n_samples, llh_val[name][ideal], label=f"{name.upper()} (Validation)", color=colors[i])
+            plt.plot(n_samples, llh_train[name][ideal], label=f"{name.upper()} (Train)", color=colors[i], dashes=[1, 2, 5, 2])
         plt.title("Ideal: " + ideal)
         plt.legend()
         plt.show()

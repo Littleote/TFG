@@ -7,8 +7,26 @@ Classes per codificar
 
 import numpy as np
 
-class EncoderNone:
+class Encoder:
+    def encode(self, data):
+        raise NotImplementedError()
+    
+    def decode(self, X):
+        raise NotImplementedError()
+    
+    def toNan(self, data):
+        raise NotImplementedError()
+
+class EncoderNone(Encoder):
     def __init__(self):
+        """
+        Encoder that leaves the data unaltered when transforming.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         self.size = 1
     
     def encode(self, data):
@@ -20,8 +38,23 @@ class EncoderNone:
     def toNan(self, data):
         return np.isnan(data)
 
-class EncoderDiscrete:
-    def __init__(self, minimum=None, maximum=None):
+class EncoderDiscrete(Encoder):
+    def __init__(self, minimum: 'int | None' = None, maximum: 'int | None' = None):
+        """
+        Encoder for discrete variables.
+
+        Parameters
+        ----------
+        minimum : 'int | None', optional
+            Minimum value of interval. If none, no minimum. The default is None.
+        maximum : 'int | None', optional
+            Maximum value of interval. If none, no maximum. The default is None.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         self.size = 1
         self.has_min = minimum is not None
         self.has_max = maximum is not None
@@ -42,8 +75,27 @@ class EncoderDiscrete:
     def toNan(self, data):
         return np.isnan(data)
     
-class EncoderLimit:
-    def __init__(self, lower=None, upper=None, tails=True, influence=1):
+class EncoderLimit(Encoder):
+    def __init__(self, lower: 'float | None' = None, upper: 'float | None' = None, tails: 'bool' = True, influence: 'float' = 1):
+        """
+        Encoder for bounded continuous variables
+
+        Parameters
+        ----------
+        lower : 'float | None', optional
+            Lower bound of the interval. If none, unbound. The default is None.
+        upper : 'float | None', optional
+            Upper bound of the interval. If none, unbound. The default is None.
+        tails : 'bool', optional
+            Create tails at the extremes to make the interval open. The default is True.
+        influence : 'float', optional
+            Size of the tails when only one is present. The default is 1.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         self.size = 1
         self.tails = tails
         assert lower is not None or upper is not None, "At least one limit must exist"
@@ -82,8 +134,21 @@ class EncoderLimit:
     def toNan(self, data):
         return np.isnan(self.nan_out(self.sign * (data - self.a) / self.range - 1)) 
 
-class EncoderIgnore:
+class EncoderIgnore(Encoder):
     def __init__(self, default=None):
+        """
+        Encoder for irrelevant variables
+
+        Parameters
+        ----------
+        default : TYPE, optional
+            Value to insert on the value ignored. The default is None.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         self.size = 0
         self.default = default
     
@@ -96,8 +161,21 @@ class EncoderIgnore:
     def toNan(self, data):
         return np.full(data.shape, False)
     
-class EncoderOHE:
-    def __init__(self, symbols):
+class EncoderOHE(Encoder):
+    def __init__(self, symbols: 'list'):
+        """
+        One hot Encoder.
+
+        Parameters
+        ----------
+        symbols : 'list'
+            List of possible values.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         try:
             symbols = np.array(symbols, dtype=object)
             self.size = len(symbols)
@@ -123,12 +201,25 @@ class EncoderOHE:
         valid = np.vectorize(lambda x: x in self.symbols)
         return ~valid(data)
 
-class EncoderEquivalence:
-    def __init__(self, symbols):
+class EncoderScale(Encoder):
+    def __init__(self, symbols: 'list'):
+        """
+        Encoder values as a scale.
+
+        Parameters
+        ----------
+        symbols : 'list'
+            Symbols of the scale in the order they appear.
+
+        Returns
+        -------
+        Encoder.
+
+        """
         symbols = np.array(symbols, dtype=object)
         self.size = 1
         self.symbols = len(symbols)
-        assert self.symbols >= 1, "There must be at least one value"
+        assert self.symbols >= 1, "There must be at least one symbol"
         values = np.arange(self.symbols)
         self.forward = {symb: val for symb, val in zip(symbols, values)}
         self.backward = {val: symb for symb, val in zip(symbols, values)}

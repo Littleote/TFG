@@ -12,17 +12,19 @@ import dill
 from time import time as gettime
 
 import synthdata.encoder as enc
+from synthdata.generator._auto import AutoSelection
 from ._transformer import Transformer
 
 class DataHub(Transformer):
-    def __init__(self, cores=None, **kwrds):
-        super().__init__(**kwrds)
-        if not cores:
+    def __init__(self, cores: 'int | None' = 1, model: 'Generator' = AutoSelection(), **kwargs):
+        super().__init__(**kwargs)
+        if cores is None:
             cores = 1
         self.use_mp = (cores != 1)
         self.cores = cores
+        self.model = model
     
-    def load(self, data, encoders=dict(), method=None):
+    def load(self, data: 'DataFrame', encoders: 'dict[str, Encoder]' = dict()):
         assert len(data.shape) == 2, "data must be a 2d array of shape (n_samples, n_features)"
         
         self.data = data
@@ -31,11 +33,10 @@ class DataHub(Transformer):
             label: enc.auto(data[label])
             for label in self.labels
             } | encoders)
-        self.method = None
         self.samples, self.features = data.shape
         
-    def set_method(self, method):
-        self.method = method
+    def set_model(self, model):
+        self.model = model
         
     def set_cores(self, cores=None):
         if not cores:
@@ -92,63 +93,63 @@ class DataHub(Transformer):
             self.encoders[target] = target_encoder
         return results
     
-    def _kfold(trans, subdata, method, n_samples, folds, validation, return_fit, return_time):
-        def sample_fold_total(n_samples, folds, total):
-            if folds is None:
-                assert total >= 2 * n_samples, "n_samples to big for the data"
-                folds = total // n_samples
-                return n_samples, folds, n_samples * folds
-            elif n_samples is None:
-                assert folds >= 2, "folds must be at least 2"
-                n_samples = total // folds
-                return n_samples, folds, folds * n_samples
-            else:
-                assert total >= 2 * n_samples, "n_samples to big for the data"
-                folds = min(folds, total // n_samples)
-                return n_samples, folds, n_samples * folds
-        
+    def _kfold(trans, subdata, model, train_samples, validation_samples, folds, validation, return_fit, return_time):
         subsample = len(subdata)
-        sample, fold, total = sample_fold_total(n_samples, folds, subsample)
-        sampling = np.reshape(np.random.choice(subsample, total, False), (fold, -1))
+        fold_size = subsample // folds
+        total = folds * fold_size
+        train_samples = total - fold_size if train_samples is None else train_samples
+        validation_samples = fold_size if validation_samples is None else validation_samples
+        
+        sampling = np.reshape(np.random.choice(subsample, total, False), (folds, -1))
         value = 0
         selfvalue = 0
         fit_time = 0
         eval_time = 0
-        for i in range(fold):
-            train = subdata.iloc[sampling[i]]
-            test = subdata.iloc[sampling[(i + 1) % fold]]
+        for i in range(folds):
+            ind = [(i + j) % folds for j in range(1, folds)]
+            train = subdata.iloc[sampling[ind].flatten()[:train_samples]]
+            test = subdata.iloc[sampling[i][:validation_samples]]
             start = gettime()
-            trans.run(train, method.fit)
+            trans.run(train, model.fit)
             fit_time += gettime() - start
             if validation == 'loglikelihood':
                 if return_fit:
-                    selfvalue += method.loglikelihood(trans.transform(train)) / sample + np.log(trans.deformation())
+                    selfvalue += model.loglikelihood(trans.transform(train)) / train_samples + np.log(trans.deformation())
                 start = gettime()
-                value += method.loglikelihood(trans.transform(test)) / sample + np.log(trans.deformation())
+                value += model.loglikelihood(trans.transform(test)) / validation_samples + np.log(trans.deformation())
                 eval_time += gettime() - start
             else:
                 start = gettime()
-                Xgen = trans.transform(trans.inv_transform(method.generate(sample)), process=False)
+                Xgen = trans.transform(trans.inv_transform(model.generate(validation_samples)), process=False)
                 eval_time += gettime() - start
-                Xtrain = trans.transform(train, process=False)
                 Xtest = trans.transform(test, process=False)
-                if return_fit:
-                    selfvalue += validation(Xtrain, Xgen)
                 value += validation(Xtest, Xgen)
-        output = {'validation': value / fold}
+                if return_fit:
+                    if train_samples > validation_samples:
+                        Xgen = trans.transform(trans.inv_transform(model.generate(train_samples)), process=False)
+                    elif train_samples < validation_samples:
+                        Xgen = Xgen[:train_samples]
+                    Xtrain = trans.transform(train, process=False)
+                    selfvalue += validation(Xtrain, Xgen)
+        output = {'validation': value / folds}
         if return_fit:
-            output |= {'train': selfvalue / fold}
+            output |= {'train': selfvalue / folds}
         if return_time:
-            output |= {'fitting_time': fit_time / fold, 'evaluation_time': eval_time / fold}
+            output |= {'fitting_time': fit_time / folds, 'evaluation_time': eval_time / folds}
         return output
     
-    def kfold_validation(self, n_samples=None, folds=None, method=None, validation='loglikelihood', target=None, return_fit=False, return_time=True):
-        method = self.method if method is None else method
-        if n_samples is None and folds is None:
-            raise ValueError("No value specified for kfold validation")
+    def kfold_validation(self, folds: 'int' = None,
+                         train_samples: 'int | None' = None, validation_samples: 'int | None' = None,
+                         validation: 'str | function' = 'loglikelihood',
+                         model: 'Generator | None' = None, target: 'str | None' = None,
+                         return_fit: 'bool' = False, return_time: 'bool' = True):
+        model = self.model if model is None else model
+        if folds is None:
+            raise ValueError("No value specified for number of folds in kfold validation")
         args = {
-            'method': method,
-            'n_samples': n_samples,
+            'model': model,
+            'train_samples': train_samples,
+            'validation_samples': validation_samples,
             'folds': folds,
             'validation': validation,
             'return_fit': return_fit,
@@ -158,47 +159,58 @@ class DataHub(Transformer):
             return self.for_target(target, DataHub._kfold, **args)['all']
         return self.for_target(target, DataHub._kfold, **args)
 
-    def _generate(trans, subdata, method, n_samples):
-        trans.run(subdata, method.fit)
-        return trans.inv_transform(method.generate(n_samples))
+    def _generate(trans, subdata, model, n_samples):
+        trans.run(subdata, model.fit)
+        return trans.inv_transform(model.generate(n_samples))
     
-    def generate(self, n_samples, method=None, target=None):
-        method = self.method if method is None else method
+    def generate(self, n_samples: 'int',
+                 model: 'Generator | None' = None, target: 'str | None' = None):
+        model = self.model if model is None else model
         
-        output = self.for_target(target, DataHub._generate, method=method, n_samples=n_samples)
+        output = self.for_target(target, DataHub._generate, model=model, n_samples=n_samples)
         return pd.concat(output.values(), ignore_index=True)
         
-    def _fill(trans, subdata, method):
+    def _fill(trans, subdata, model):
         new_data = subdata.copy()
-        nans = trans.run(new_data, method.fit)
+        nans = trans.run(new_data, model.fit)
         new_data.iloc[nans] = trans.inv_transform(
-            method.fill(trans.transform(new_data[nans]))
+            model.fill(trans.transform(new_data[nans]))
         )
         return new_data
     
-    def fill(self, method=None, target=None):
-        method = self.method if method is None else method
+    def fill(self, model: 'Generator | None' = None, target: 'str | None' = None):
+        model = self.model if model is None else model
         
-        output = self.for_target(target, DataHub._fill, method)
+        output = self.for_target(target, DataHub._fill, model)
         return pd.concat(output.values(), ignore_index=True)
      
-    def _extend(trans, subdata, method, n_samples, max_samples):
+    def _extend(trans, subdata, model, n_samples, max_samples):
         subsample = len(subdata)
         if n_samples <= subsample:
             return subdata.iloc[np.random.choice(subsample, min(max_samples, subsample), False)]
         else:
-            trans.run(subdata, method.fit)
-            new_data = trans.inv_transform(method.generate(n_samples - subsample))
+            trans.run(subdata, model.fit)
+            new_data = trans.inv_transform(model.generate(n_samples - subsample))
             return pd.concat([subdata, new_data])
     
-    def extend(self, n_samples, max_samples='n_samples', method=None, target=None):
-        method = self.method if method is None else method
-        if max_samples == 'n_samples':
+    def extend(self, n_samples: 'str | int', max_samples: 'str | int' = 'n_samples',
+               on_empty: 'str' = 'ignore',
+               model: 'Generator | None' = None, target: 'str | None' = None):
+        model = self.model if model is None else model
+        if isinstance(n_samples, str):
+            assert isinstance(target, str), "Special values for n_samples require a target column"
+            if n_samples.lower() in ['min_target']:
+                n_samples = min(np.unique(self.data[target].to_numpy(), return_counts=True)[1])
+            elif n_samples.lower() in ['max_target']:
+                n_samples = max(np.unique(self.data[target].to_numpy(), return_counts=True)[1])
+            else:
+                raise ValueError(f"Unrecognized special value '{n_samples}' for n_samples, use 'min_target' or 'max_target' instead")
+        if max_samples.lower() in ['n_samples']:
             max_samples = n_samples
-        elif max_samples is None:
+        elif max_samples.lower() in ['max']:
             max_samples = self.samples
         else:
             max_samples = max(max_samples, n_samples)
             
-        output = self.for_target(target, DataHub._extend, method, n_samples, max_samples)
+        output = self.for_target(target, DataHub._extend, model, n_samples, max_samples)
         return pd.concat(output.values(), ignore_index=True)
