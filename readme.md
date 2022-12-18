@@ -20,14 +20,14 @@ Classe per manejar les dades i encarregarse de cridar a totes les funcions neces
         + **remove_cov** (`bool`): Unificar dades amb alta covariancia o no. (`True` per defecte)
         + **whitening** (`bool`): Blanquejar o no les dades. (`False` per defecte)
    
-- `datahub.load(self, data: 'DataFrame', encoders: 'dict[str, Encoder]' = dict())` \
+- `datahub.load(data: 'DataFrame', encoders: 'dict[str, Encoder]' = dict())` \
 Funció per carregar les dades i poder especificar el tipus i comportament de les dades.
     + **data** (`pandas.DataFrame`): Dataset per analitzar.
     + **encoders** (`dict[str, Encoder]`): Llista de codificadors utilitzats per les diferents columnes del conjunt de dades. 
     En cas de que una columna no es trobi en la llista, s'utilitzarà `synthdata.encoder.auto` per assignar-li un.
     Aquest valor es pot cambiar amb `datahub.add_encoders(self, encoders: 'dict[str, Encoder]')` o  `datahub.set_encoder(self, label: 'str', encoder: 'Encoder | str')`
     
-- `datahub.kfold_validation(self, folds: 'int' = None, train_samples: 'int | None' = None, validation_samples: 'int | None' = None, validation: 'str | function' = 'loglikelihood', model: 'Generator | None' = None, target: 'str | None' = None, return_fit: 'bool' = False, return_time: 'bool' = True)` \
+- `datahub.kfold_validation(folds: 'int' = None, train_samples: 'int | None' = None, validation_samples: 'int | None' = None, validation: 'str | function' = 'loglikelihood', model: 'Generator | None' = None, target: 'str | None' = None, return_fit: 'bool' = False, return_time: 'bool' = True)` \
 Funció per validar el correcte funcionament d'un dels models.
     + **folds** (`int`): Nombre de divisions i repeticons per fer.
     + **train_samples** (`int` o `None`): Nombre de mostres que limitar a l'entrenament.
@@ -44,22 +44,23 @@ Funció per validar el correcte funcionament d'un dels models.
     + **return_fit** (`bool`): Retornar els valors de validació a l'entrenament.
     + **return_time** (`bool`): Retornar el temps d'entrenament, i el temps de validació.
     
-- `datahub.generate(self, n_samples: 'int', model: 'Model | None' = None, target: 'str | None' = None)` \
+- `datahub.generate(n_samples: 'int', model: 'Generator | None' = None, target: 'str | None' = None)` \
 Funció per generar un dataset purament sintètic a partir de les dades.
     + **n_samples** (`int`): Nombre de mostres que tindra el dataset de sortida.
-    + **model** (`Model` o `None`): Model per sobresciure el per defecte per aquesta execució. Si és `None`, utilitzar el valor per defecte.
+    + **model** (`Generator` o `None`): Model per sobresciure el per defecte per aquesta execució. Si és `None`, utilitzar el valor per defecte.
     + **target** (`str` o `None`): Nom d'una columna per si es vol aplicar la funció independentment a tots els diferents valors d'aquesta. Si és `None`, aplicar a tots els valors alhora.
     
-- `datahub.fill(self, model: 'Generator | None' = None, target: 'str | None' = None)` \
+- `datahub.fill(model: 'Generator | None' = None, target: 'str | None' = None)` \
 Funció per omplir forats o remplaçar dades invalides al dataset.
     + **model** (`Generator` o `None`): Model per sobresciure el per defecte per aquesta execució.
     Si és `None`, utilitzar el valor per defecte.
     + **target** (`str` o `None`): Nom d'una columna per si es vol aplicar la funció independentment a tots els diferents valors d'aquesta.
     Si és `None`, aplicar a tots els valors alhora.
     
-- `datahub.extend(self, n_samples: 'int', max_sample: 'str | int' = 'n_samples', on_empty: 'str' = 'ignore', model: 'Generator | None' = None, target: 'str | None' = None)` \
+- `datahub.extend(self, n_samples: 'str | int', max_samples: 'str | int' = 'n_samples', on_empty: 'str' = 'ignore', model: 'Generator | None' = None, target: 'str | None' = None)` \
 Funció per augmentar (o disminuir) la mida del dataset amb noves dades sintétiques.
-    + **n_samples** (`int`): Nombre mínim de mostres que tindra el dataset de sortida.
+    + **n_samples** (`str` o `int`): Nombre mínim de mostres que tindra el dataset de sortida.
+    Si és 'min_target' o 'max_target', utilitzara el nombre de mostres de la categoria amb menys o més mostres respectivament.
     + **max_samples** (`str` o `int`): Nombre màxim de mostres que tindra el dataset de sortida.
     Si és 'n_samples', utilitzarà el valor `n_samples`.
     Si és 'max', no imposarà màxim`.
@@ -139,8 +140,8 @@ Funció per augmentar (o disminuir) la mida del dataset amb noves dades sintéti
     + **default** (Qualsevol): Valor per posar a la variable al fer la transformació inversa.
     
 - `encoder = synthdata.encoder.limit(lower: 'float | None' = None, upper: 'float | None' = None, tails: 'bool' = True, influence: 'float' = 1)`
-    + **lower** (``float` o `None``): Valor mínim de la variable.
-    + **upper** (``float` o `None``): Valor màxim de la variable.
+    + **lower** (`float` o `None`): Valor mínim de la variable.
+    + **upper** (`float` o `None`): Valor màxim de la variable.
     + **tails** (`bool`): Transformar els extrems en cues (per variables en intervals oberts) o no (per variables en intervals tancats).
     + **influence** (`float`): Escala d'influcencia de la cua per casos amb només un límit, quan més gran sigui, més abans apareixerà la cua.
     
@@ -151,6 +152,33 @@ Funció per augmentar (o disminuir) la mida del dataset amb noves dades sintéti
     + **symbols** (`list`): Llistat de símbols (noms, numeros, ...) que hi ha en el mateix ordre que en la escala que representen.
 
 # Exemples
+
+Omplir un dataset (`df`) amb forats:
+```python
+import synthdata as sd
+
+dh = sd.DataHub()
+dh.load(df)
+df_filled = dh.fill()
+```
+
+Balancejar un dataset (`df`) perquè totes les categories de 'label' estiguin igual de representades.
+```python
+import synthdata as sd
+
+dh = sd.DataHub()
+dh.load(df)
+df_balanced = dh.extend(n_samples='max_target', target='label')
+```
+
+Augmentar el nombre de dades d'un dataset (`df`).
+```python
+import synthdata as sd
+
+dh = sd.DataHub()
+dh.load(df)
+df_augmented = dh.extend(n_samples=2*len(df))
+```
 
 # Informe
 
