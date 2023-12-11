@@ -17,9 +17,9 @@ from sphere_dataset import sphere
 dh = sd.DataHub()
 small_dh = sd.DataHub()
 N = 1000
-folds = 5
+folds = 7
 samples = 500
-for dim in [2, 5, 10, 20, 50]:
+for dim in [3, 5, 10, 20, 50]:
     print(f"\n{dim}D-sphere\n{'=' * 50}")
     dh.load(sphere(N, dim))
     is_multivariate = True, False
@@ -46,3 +46,4 @@ for dim in [2, 5, 10, 20, 50]:
             model._set_k(k_test)
             out = dh.kfold_validation(train_samples=500, folds=5, model=model)
             print(f"Execution time (k = {k_test}) = {out['fitting_time']}")
+            print(f"Loglikelihood = {out['validation']}")

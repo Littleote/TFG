@@ -93,7 +93,7 @@ class DataHub(Transformer):
             self.encoders[target] = target_encoder
         return results
     
-    def _kfold(trans, subdata, model, train_samples, validation_samples, folds, validation, return_fit, return_time):
+    def _kfold(trans, subdata, model, train_samples, validation_samples, folds, validation, validate_transformed, return_fit, return_time):
         subsample = len(subdata)
         fold_size = subsample // folds
         total = folds * fold_size
@@ -120,17 +120,24 @@ class DataHub(Transformer):
                 eval_time += gettime() - start
             else:
                 start = gettime()
-                Xgen = trans.transform(trans.inv_transform(model.generate(validation_samples)), process=False)
+                Xgen = trans.inv_transform(model.generate(validation_samples))
                 eval_time += gettime() - start
-                Xtest = trans.transform(test, process=False)
-                value += validation(Xtest, Xgen)
+                Xtest = test
+                if validate_transformed:
+                    Xgen = trans.transform(Xgen, process=False)
+                    Xtest = trans.transform(Xtest, process=False)
+                value += validation(Xgen, Xtest)
                 if return_fit:
                     if train_samples > validation_samples:
-                        Xgen = trans.transform(trans.inv_transform(model.generate(train_samples)), process=False)
+                        Xgen = trans.inv_transform(model.generate(train_samples))
+                        if validate_transformed:
+                            Xgen = trans.transform(Xgen, process=False)
                     elif train_samples < validation_samples:
                         Xgen = Xgen[:train_samples]
-                    Xtrain = trans.transform(train, process=False)
-                    selfvalue += validation(Xtrain, Xgen)
+                    Xtrain = train
+                    if validate_transformed:
+                        Xtrain = trans.transform(Xtrain, process=False)
+                    selfvalue += validation(Xgen, Xtrain)
         output = {'validation': value / folds}
         if return_fit:
             output |= {'train': selfvalue / folds}
@@ -140,7 +147,7 @@ class DataHub(Transformer):
     
     def kfold_validation(self, folds: 'int' = None,
                          train_samples: 'int | None' = None, validation_samples: 'int | None' = None,
-                         validation: 'str | function' = 'loglikelihood',
+                         validation: 'str | function' = 'loglikelihood', validate_transformed: 'bool' = True,
                          model: 'Generator | None' = None, target: 'str | None' = None,
                          return_fit: 'bool' = False, return_time: 'bool' = True):
         model = self.model if model is None else model
@@ -152,6 +159,7 @@ class DataHub(Transformer):
             'validation_samples': validation_samples,
             'folds': folds,
             'validation': validation,
+            'validate_transformed': validate_transformed,
             'return_fit': return_fit,
             'return_time': return_time
         }

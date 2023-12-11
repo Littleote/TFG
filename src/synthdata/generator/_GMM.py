@@ -61,7 +61,7 @@ def parse_criterion(criterion, X):
 class GMM(Generator):
     def __init__(self, k: 'int | None' = None, k_max: 'int | None' = None, multivariate: 'bool' = True,
                  iterations_limit: 'int' = 1000, time_limit: 'float' = 1,
-                 llh_tolerance: 'float' = 1e-3, attempts: 'int' = 3, criterion: 'str' = 'BIC'):
+                 llh_tolerance: 'float' = 1e-3, attempts: 'int' = 3, criterion: 'str' = 'CV'):
         super().__init__()
         if k is None:
             self.k_mode = 'search'
@@ -170,12 +170,12 @@ class GMM(Generator):
             for weight, mean, covariance in \
                 zip(self.weights, self.means, self.covariances):
                     centered = (y - mean)[good]
-                    _covariance = covariance[good][:,good] + tol * np.identity(goods)
+                    _covariance = covariance[good][:,good]
                     determinant = np.linalg.det(_covariance)
                     inverse = np.linalg.inv(_covariance)
                     exponent = (centered @ inverse @ centered) / 2
                     k_prob.append(weight * np.exp(-exponent) / np.sqrt(determinant))
-            prob = np.array(k_prob)
+            prob = np.maximum(np.nan_to_num(np.array(k_prob)), 1e-300)
             ind = np.random.choice(self.k, p=prob / np.sum(prob))
             covariance = self.covariances[ind]
             inv_subcov = np.linalg.inv(covariance[good][:,good] + tol * np.identity(goods))

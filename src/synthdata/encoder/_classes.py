@@ -153,6 +153,13 @@ class EncoderIgnore(Encoder):
         self.default = default
     
     def encode(self, data):
+        if self.default is None:
+            if data.dtypes[0] == object:
+                self.default = 'ignored'
+            elif data.dtypes[0] == float:
+                self.default = np.nan
+            else:
+                self.default = 0
         return np.zeros((data.shape[0], 0))
     
     def decode(self, X):

@@ -17,14 +17,14 @@ def main():
     ideal_reduced = pd.read_csv("datasets/ideal_reduced_dataset.csv", sep=';')
     d = sd.DataHub(cores=4)
     d.load(ideal_reduced, encoders = {
-        'time_x': ignore(0),
-        'time_y': ignore(0),
-        'time_x.1': ignore(0),
-        'time_y.1': ignore(0),
-        'time_log': ignore(0),
-        'id': ignore(0),
-        'threads': ignore(0),
-        'P_index': ignore(0),
+        'time_x': ignore(),
+        'time_y': ignore(),
+        'time_x.1': ignore(),
+        'time_y.1': ignore(),
+        'time_log': ignore(),
+        'id': ignore(),
+        'threads': ignore(),
+        'P_index': ignore(),
         'T_list': ignore(),
         'P_list': ignore()
         })
