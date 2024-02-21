@@ -1,6 +1,6 @@
 # Instal·lació
 
-`pip install --upgrade synnthdata`
+`pip install synthdata`
 
 # Documentació
 
